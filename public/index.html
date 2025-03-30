@@ -1,0 +1,85 @@
+<!-- File: public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doom-like FPS Engine</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #000;
+    }
+    #game-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+    }
+    .hud {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #fff;
+      font-family: monospace;
+      font-size: 16px;
+      pointer-events: none;
+    }
+    .crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.5);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .instructions {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border-radius: 5px;
+      max-width: 500px;
+    }
+    .instructions.hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container"></div>
+  <div class="crosshair"></div>
+  <div class="hud">FPS: <span id="fps">0</span></div>
+  <div class="instructions" id="instructions">
+    <h2>Doom-like FPS Engine</h2>
+    <p>Click anywhere to start</p>
+    <p>Controls:</p>
+    <ul>
+      <li>W, A, S, D: Move</li>
+      <li>Mouse: Look around</li>
+      <li>ESC: Exit pointer lock</li>
+    </ul>
+  </div>
+  <script src="bundle.js"></script>
+  <script>
+    document.addEventListener('click', () => {
+      document.getElementById('instructions').classList.add('hidden');
+    });
+    
+    document.addEventListener('pointerlockchange', () => {
+      if (document.pointerLockElement !== document.body) {
+        document.getElementById('instructions').classList.remove('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
