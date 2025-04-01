@@ -1,0 +1,83 @@
+{
+  "name": "Level 1",
+  "spawnPoint": { "x": 640, "z": 280, "y": 0, "rotation": 0 },
+  "textures": [
+    { "type": "wall", "name": "north", "path": "WALL01.png" },
+
+    { "type": "wall", "name": "west", "path": "WALL02.png" },
+    { "type": "floor", "name": "floor", "path": "FLOOR.png" }
+  ],
+  "rooms": [
+    {
+      "walls": [
+        {
+          "x": 620,
+          "y": 0,
+          "z": 280,
+          "width": 40,
+          "height": 5,
+          "rotation": 1.5707963267948966,
+          "texture": "west",
+          "depth": 5,
+          "normal": { "x": 1, "y": 0, "z": 0 }
+        },
+        {
+          "x": 640,
+          "y": 0,
+          "z": 300,
+          "width": 40,
+          "height": 5,
+          "rotation": 0,
+          "texture": "north",
+          "depth": 5,
+          "normal": { "x": 0, "y": 0, "z": 1 }
+        },
+        {
+          "x": 660,
+          "y": 0,
+          "z": 280,
+          "width": -40,
+          "height": 5,
+          "rotation": 1.5707963267948966,
+          "texture": "west",
+          "depth": 1,
+          "normal": { "x": 1, "y": 0, "z": 0 }
+        },
+        {
+          "x": 640,
+          "y": 0,
+          "z": 260,
+          "width": -40,
+          "height": 5,
+          "rotation": 0,
+          "texture": "north",
+          "depth": 0.5,
+          "normal": { "x": 0, "y": 0, "z": 1 }
+        }
+      ],
+      "floors": [
+        {
+          "x": 640,
+          "y": -1,
+          "z": 280,
+          "width": 40,
+          "length": 40,
+          "texture": "floor",
+          "rotation": -1.5707963267948966
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "type": "player",
+      "position": { "x": 2, "y": 0, "z": 2 },
+      "properties": { "speed": 5, "health": 100 }
+    },
+    {
+      "type": "enemy",
+      "position": { "x": 8, "y": 0, "z": 8 },
+      "properties": { "ai": "patrol", "damage": 10 }
+    }
+  ]
+}

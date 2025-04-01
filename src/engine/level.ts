@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { CollisionSystem, Wall } from "./collision";
-import { level1 } from "../maps/level1";
+
 import { ILevel, IRoom, ITexture } from "../types/level";
+import level1 from "../maps/map.json";
 
 export class Level {
   public objects: THREE.Object3D[] = [];
@@ -35,7 +36,7 @@ export class Level {
       switch (texture.type) {
         case "wall":
           // Make the texture repeat (important for DOOM-like aesthetics)
-          textureObject.repeat.set(5, 2); // Adjust repeating as needed
+          textureObject.repeat.set(50, 2); // Adjust repeating as needed
 
           // Enable mipmapping for better quality at distance
           textureObject.minFilter = THREE.LinearMipmapLinearFilter;
@@ -44,7 +45,7 @@ export class Level {
           this.wallTextures.set(texture.name, textureObject);
           break;
         case "floor":
-          textureObject.repeat.set(7, 7); // Adjust repeating as needed
+          textureObject.repeat.set(50, 50); // Adjust repeating as needed
           this.floorTextures.set(texture.name, textureObject);
           break;
         default:
@@ -65,6 +66,8 @@ export class Level {
           wall.y,
           wall.z,
           wall.width,
+          wall.height,
+          wall.depth,
           wall.rotation,
           wall.texture,
           new THREE.Vector3(wall.normal.x, wall.normal.y, wall.normal.z)
@@ -123,11 +126,13 @@ export class Level {
     y: number,
     z: number,
     width: number,
+    height: number,
+    depth: number,
     rotation: number,
     textureKey: string,
     normal: THREE.Vector3
   ): void {
-    const wallGeometry = new THREE.BoxGeometry(width, 5, 0.5);
+    const wallGeometry = new THREE.BoxGeometry(width, height, depth);
 
     // Get texture for this wall
     const texture = this.wallTextures.get(textureKey);
@@ -136,6 +141,7 @@ export class Level {
       map: texture,
       roughness: 0.7,
       metalness: 0.2,
+      side: THREE.DoubleSide,
     });
 
     const wall = new THREE.Mesh(wallGeometry, wallMaterial);

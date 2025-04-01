@@ -12,9 +12,9 @@ export class Renderer {
 
     // Set up camera
     this.camera = new THREE.PerspectiveCamera(
-      45, // Field of view
+      90, // Field of view
       window.innerWidth / window.innerHeight, // Aspect ratio
-      0.1, // Near clipping plane
+      0.5, // Near clipping plane
       1000 // Far clipping plane
     );
     this.camera.position.z = 5;
