@@ -160,7 +160,7 @@ export class Player {
     z: number;
     rotation: number;
   }): void {
-    this.camera.position.set(position.x, position.y + 1, position.z); // Add height offset for eye level
+    this.camera.position.set(position.x, position.y + 2, position.z); // Add height offset for eye level
     this.camera.rotation.y = position.rotation;
   }
 

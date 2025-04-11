@@ -36,7 +36,7 @@ export class Level {
       switch (texture.type) {
         case "wall":
           // Make the texture repeat (important for DOOM-like aesthetics)
-          textureObject.repeat.set(50, 2); // Adjust repeating as needed
+          textureObject.repeat.set(7, 4); // Adjust repeating as needed
 
           // Enable mipmapping for better quality at distance
           textureObject.minFilter = THREE.LinearMipmapLinearFilter;
@@ -45,7 +45,7 @@ export class Level {
           this.wallTextures.set(texture.name, textureObject);
           break;
         case "floor":
-          textureObject.repeat.set(50, 50); // Adjust repeating as needed
+          textureObject.repeat.set(25, 25); // Adjust repeating as needed
           this.floorTextures.set(texture.name, textureObject);
           break;
         default:
