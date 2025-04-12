@@ -2,8 +2,8 @@
   "name": "Level 1",
   "spawnPoint": { "x": 35, "y": 0, "z": 25, "rotation": 0 },
   "textures": [
-    { "type": "wall", "name": "north", "path": "FreeDoomWall1.png" },
-    { "type": "wall", "name": "south", "path": "FreeDoomWall1.png" },
+    { "type": "wall", "name": "north", "path": "FreeDoomWall3.png" },
+    { "type": "wall", "name": "south", "path": "FreeDoomWall3.png" },
     { "type": "wall", "name": "east", "path": "FreeDoomWall2.png" },
     { "type": "wall", "name": "west", "path": "FreeDoomWall2.png" },
     { "type": "floor", "name": "floor", "path": "FreeDoomFloor1.png" }
@@ -224,7 +224,7 @@
       "floors": [
         {
           "x": 37.5,
-          "y": -0.1,
+          "y": -1,
           "z": 25,
           "width": 15,
           "length": 10,
@@ -233,7 +233,7 @@
         },
         {
           "x": 37.5,
-          "y": -0.1,
+          "y": -1,
           "z": 37.5,
           "width": 5,
           "length": 15,
@@ -242,7 +242,7 @@
         },
         {
           "x": 37.5,
-          "y": -0.1,
+          "y": -1,
           "z": 52.5,
           "width": 15,
           "length": 15,
@@ -251,7 +251,7 @@
         },
         {
           "x": 52.5,
-          "y": -0.1,
+          "y": -1,
           "z": 52.5,
           "width": 15,
           "length": 5,
@@ -260,7 +260,7 @@
         },
         {
           "x": 67.5,
-          "y": -0.1,
+          "y": -1,
           "z": 52.5,
           "width": 15,
           "length": 15,
@@ -268,6 +268,15 @@
           "rotation": -1.5707963267948966
         }
       ]
+    }
+  ],
+
+  "enemies": [
+    {
+      "x": 30,
+      "y": 0,
+      "z": 25,
+      "type": "imp"
     }
   ],
   "entities": [

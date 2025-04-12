@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { InputManager, Key } from "./input";
 import { CollisionSystem } from "./collision";
 import { IPosition } from "../types/level";
+import { Enemy } from "./enemy";
 
 export class Player {
   private camera: THREE.PerspectiveCamera;
@@ -9,6 +10,17 @@ export class Player {
   private speed: number = 0.2;
   private lookSensitivity: number = 0.002;
   private collisionRadius: number = 0.5; // Player collision radius
+  private health: number = 100;
+  private maxHealth: number = 100;
+  private armor: number = 0;
+  private maxArmor: number = 100;
+  private lastDamageTime: number = 0;
+  private damageInvulnerabilityTime: number = 500; // ms
+  private isDead: boolean = false;
+  private weaponDamage: number = 25;
+  private weaponRange: number = 20;
+  private lastShotTime: number = 0;
+  private shootCooldown: number = 300; // ms
 
   constructor(camera: THREE.PerspectiveCamera, initialPosition?: IPosition) {
     this.camera = camera;
@@ -160,7 +172,7 @@ export class Player {
     z: number;
     rotation: number;
   }): void {
-    this.camera.position.set(position.x, position.y + 2, position.z); // Add height offset for eye level
+    this.camera.position.set(position.x, position.y + 1.5, position.z); // Add height offset for eye level
     this.camera.rotation.y = position.rotation;
   }
 
@@ -220,5 +232,141 @@ export class Player {
     if (bestDistance > 0) {
       this.camera.position.copy(bestPosition);
     }
+  }
+
+  public getPosition(): THREE.Vector3 {
+    return this.camera.position.clone();
+  }
+
+  public getDirection(): THREE.Vector3 {
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyQuaternion(this.camera.quaternion);
+    return direction.normalize();
+  }
+
+  public takeDamage(amount: number): void {
+    // Check if player is invulnerable
+    const currentTime = Date.now();
+    if (currentTime - this.lastDamageTime < this.damageInvulnerabilityTime) {
+      return;
+    }
+
+    // Record damage time for invulnerability period
+    this.lastDamageTime = currentTime;
+
+    // Calculate actual damage after armor
+    let actualDamage = amount;
+    if (this.armor > 0) {
+      // Armor absorbs 2/3 of damage
+      const armorAbsorption = Math.min(this.armor, actualDamage * (2 / 3));
+      this.armor -= armorAbsorption;
+      actualDamage -= armorAbsorption;
+    }
+
+    // Apply damage to health
+    this.health -= actualDamage;
+
+    // Check if dead
+    if (this.health <= 0) {
+      this.health = 0;
+      this.die();
+    }
+
+    console.log(`Player hit! Health: ${this.health}, Armor: ${this.armor}`);
+
+    // You would add screen flash or other damage feedback here
+  }
+
+  private die(): void {
+    if (this.isDead) return;
+
+    this.isDead = true;
+    console.log("Player died!");
+
+    // Implement death behavior (game over screen, etc.)
+  }
+
+  public isPlayerDead(): boolean {
+    return this.isDead;
+  }
+
+  public shoot(enemies: Enemy[]): void {
+    const currentTime = Date.now();
+    if (currentTime - this.lastShotTime < this.shootCooldown) {
+      return; // Can't shoot yet
+    }
+
+    this.lastShotTime = currentTime;
+
+    // Create a ray from camera
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera); // Center of screen
+
+    type TClosestHit = { distance: number; enemy: Enemy } | null;
+    // Check for hits
+    let closestHit: TClosestHit = null;
+
+    enemies.forEach((enemy) => {
+      // We need to calculate if the ray hits the enemy
+      // In a real implementation, you would use raycaster.intersectObject
+      // For simplicity, we'll use a distance-based approach
+
+      const direction = this.getDirection();
+      const enemyPosition = enemy.mesh.position;
+      const playerPosition = this.camera.position;
+
+      // Vector from player to enemy
+      const toEnemy = enemyPosition.clone().sub(playerPosition);
+
+      // Project toEnemy onto player direction
+      const projection = toEnemy.dot(direction);
+
+      // Enemy is behind player if projection is negative
+      if (projection < 0) return;
+
+      // Calculate the closest point on the ray to the enemy
+      const closestPoint = playerPosition
+        .clone()
+        .add(direction.clone().multiplyScalar(projection));
+
+      // Distance from closest point to enemy center
+      const distance = closestPoint.distanceTo(enemyPosition);
+
+      // If within range, consider it a hit
+      if (distance < 1.0 && projection < this.weaponRange) {
+        // If this is the closest hit so far, record it
+        if (!closestHit || projection < closestHit.distance) {
+          closestHit = {
+            distance: projection,
+            enemy: enemy,
+          };
+        }
+      }
+    });
+
+    // Hit the closest enemy
+    if (closestHit) {
+      const hit = closestHit as TClosestHit;
+      const killed = hit?.enemy.takeDamage(this.weaponDamage);
+      console.log(`Hit enemy! ${killed ? "Killed!" : ""}`);
+
+      // Add hit effects, sounds, etc.
+    }
+  }
+
+  public heal(amount: number): void {
+    this.health = Math.min(this.health + amount, this.maxHealth);
+  }
+
+  public addArmor(amount: number): void {
+    this.armor = Math.min(this.armor + amount, this.maxArmor);
+  }
+
+  public getHealth(): number {
+    return this.health;
+  }
+
+  public getArmor(): number {
+    return this.armor;
   }
 }

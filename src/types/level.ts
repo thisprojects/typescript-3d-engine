@@ -1,3 +1,5 @@
+import { Enemy } from "../engine/enemy";
+
 export interface IPosition {
   x: number;
   y: number;
@@ -44,10 +46,18 @@ interface Entity {
   properties: Record<string, any>;
 }
 
+export interface IEnemyLocations {
+  x: number;
+  y: number;
+  z: number;
+  type: string;
+}
+
 export interface ILevel {
   name: string;
   textures: ITexture[];
   rooms: IRoom[];
   entities: Entity[];
   spawnPoint: IPosition;
+  enemies: IEnemyLocations[];
 }

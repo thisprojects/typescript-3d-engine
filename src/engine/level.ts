@@ -3,6 +3,8 @@ import { CollisionSystem, Wall } from "./collision";
 
 import { ILevel, IRoom, ITexture } from "../types/level";
 import level1 from "../maps/map.json";
+import { EnemySpawnPoint } from "./enemymanager";
+import { EnemyType } from "./enemy";
 
 export class Level {
   public objects: THREE.Object3D[] = [];
@@ -12,6 +14,7 @@ export class Level {
   private floorTextures: Map<string, THREE.Texture>;
   private levelMap: ILevel;
   private spawnPoint;
+  public enemySpawnPoints: EnemySpawnPoint[] = [];
 
   constructor() {
     this.collisionSystem = new CollisionSystem();
@@ -24,6 +27,33 @@ export class Level {
 
     this.loadTextures(this.levelMap.textures);
     this.createLevel(this.levelMap.rooms);
+    this.createEnemySpawnPoints(this.levelMap.enemies || []);
+  }
+
+  private createEnemySpawnPoints(enemyData: any[]): void {
+    if (!enemyData || !Array.isArray(enemyData)) return;
+
+    enemyData.forEach((enemy) => {
+      const position = new THREE.Vector3(enemy.x, enemy.y, enemy.z);
+
+      // Convert string type to enum
+      let enemyType = EnemyType.IMP;
+      switch (enemy.type?.toLowerCase()) {
+        case "zombie":
+          enemyType = EnemyType.ZOMBIE;
+          break;
+        case "demon":
+          enemyType = EnemyType.DEMON;
+          break;
+        default:
+          enemyType = EnemyType.IMP;
+      }
+
+      this.enemySpawnPoints.push({
+        position,
+        type: enemyType,
+      });
+    });
   }
 
   private loadTextures(textures: ITexture[]): void {
@@ -36,7 +66,7 @@ export class Level {
       switch (texture.type) {
         case "wall":
           // Make the texture repeat (important for DOOM-like aesthetics)
-          textureObject.repeat.set(7, 4); // Adjust repeating as needed
+          textureObject.repeat.set(10, 1); // Adjust repeating as needed
 
           // Enable mipmapping for better quality at distance
           textureObject.minFilter = THREE.LinearMipmapLinearFilter;
@@ -45,7 +75,7 @@ export class Level {
           this.wallTextures.set(texture.name, textureObject);
           break;
         case "floor":
-          textureObject.repeat.set(25, 25); // Adjust repeating as needed
+          textureObject.repeat.set(10, 10); // Adjust repeating as needed
           this.floorTextures.set(texture.name, textureObject);
           break;
         default:
