@@ -317,14 +317,7 @@
       ]
     }
   ],
-  "enemies": [
-    {
-      "x": 70,
-      "y": 0,
-      "z": 65,
-      "type": "imp"
-    }
-  ],
+  "enemies": [],
   "entities": [
     {
       "type": "player",

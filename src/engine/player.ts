@@ -54,29 +54,43 @@ export class Player {
     inputManager: InputManager,
     collisionSystem: CollisionSystem
   ): void {
-    // Handle mouse movement for looking around
+    // Get mouse movement delta
     const mouseMovement = inputManager.getMouseMovement();
 
-    // Apply yaw rotation (left/right) to the holder object
-    this.cameraHolder.rotation.y -= mouseMovement.x * this.lookSensitivity;
+    // Fix #1: Use smaller sensitivity values to make movement smoother
+    const adjustedSensitivity = this.lookSensitivity * 0.5;
 
-    // Apply pitch rotation (up/down) to the pitch object, with limits
-    this.cameraPitch.rotation.x -= mouseMovement.y * this.lookSensitivity;
+    // Fix #2: Apply easing to the rotation to prevent sudden changes
+    const easingFactor = 0.8;
 
-    // Clamp the pitch to avoid flipping over
-    this.cameraPitch.rotation.x = Math.max(
+    // Calculate target rotations with easing
+    const targetYaw =
+      this.cameraHolder.rotation.y - mouseMovement.x * adjustedSensitivity;
+    const targetPitch =
+      this.cameraPitch.rotation.x - mouseMovement.y * adjustedSensitivity;
+
+    // Apply easing to the rotation
+    this.cameraHolder.rotation.y =
+      this.cameraHolder.rotation.y * (1 - easingFactor) +
+      targetYaw * easingFactor;
+
+    // Apply pitch with clamping
+    const clampedPitch = Math.max(
       -this.maxPitchAngle,
-      Math.min(this.maxPitchAngle, this.cameraPitch.rotation.x)
+      Math.min(this.maxPitchAngle, targetPitch)
     );
+    this.cameraPitch.rotation.x =
+      this.cameraPitch.rotation.x * (1 - easingFactor) +
+      clampedPitch * easingFactor;
 
     // Handle keyboard movement
     const direction = new THREE.Vector3();
 
     // Forward/backward
     if (inputManager.isKeyPressed(Key.W)) {
-      direction.z = 1;
-    } else if (inputManager.isKeyPressed(Key.S)) {
       direction.z = -1;
+    } else if (inputManager.isKeyPressed(Key.S)) {
+      direction.z = 1;
     }
 
     // Left/right
@@ -86,35 +100,33 @@ export class Player {
       direction.x = 1;
     }
 
+    // No movement input, skip the rest
+    if (direction.length() === 0) return;
+
     // Normalize direction vector
-    if (direction.length() > 0) {
-      direction.normalize();
-    } else {
-      return; // No movement input, skip the rest
-    }
+    direction.normalize();
 
-    // Apply movement in camera direction
-    // Get forward and right vectors from the cameraHolder (using yaw only for movement)
-    const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(this.cameraHolder.quaternion);
-    forward.y = 0; // Keep movement on horizontal plane
-    forward.normalize();
+    // Fix #3: Use Euler angles directly instead of quaternions for movement
+    // This provides more stable movement with less texture swimming
+    const rotationY = this.cameraHolder.rotation.y;
 
-    const right = new THREE.Vector3(1, 0, 0);
-    right.applyQuaternion(this.cameraHolder.quaternion);
-    right.y = 0;
-    right.normalize();
-
-    // Calculate desired movement vector
+    // Calculate movement direction using simple trigonometry
     const moveVector = new THREE.Vector3();
-    moveVector.add(forward.clone().multiplyScalar(direction.z * this.speed));
-    moveVector.add(right.clone().multiplyScalar(direction.x * this.speed));
+    moveVector.x =
+      direction.x * Math.cos(rotationY) + direction.z * Math.sin(rotationY);
+    moveVector.z =
+      direction.z * Math.cos(rotationY) - direction.x * Math.sin(rotationY);
 
-    // Store current position for rollback if needed
+    // Scale movement by speed
+    moveVector.multiplyScalar(this.speed);
+
+    // Current position
     const originalPosition = this.cameraHolder.position.clone();
 
-    // Try to move in the desired direction
+    // Calculate new position
     const newPosition = originalPosition.clone().add(moveVector);
+
+    // Check for collisions
     const collisionInfo = collisionSystem.getCollisionInfo(
       newPosition,
       this.collisionRadius

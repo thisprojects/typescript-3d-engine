@@ -58,28 +58,43 @@ export class Level {
     });
   }
 
+  // In level.ts, update loadTextures method
   private loadTextures(textures: ITexture[]): void {
-    // Load wall textures
-
     textures.forEach((texture: ITexture) => {
       const textureObject = this.textureLoader.load(texture.path);
-      textureObject.wrapS = textureObject.wrapT = THREE.RepeatWrapping;
+
+      // Fix #1: Remove automatic texture repeating which can cause glitches
+      // Set explicit repeating settings
+      textureObject.wrapS = THREE.ClampToEdgeWrapping;
+      textureObject.wrapT = THREE.ClampToEdgeWrapping;
 
       switch (texture.type) {
         case "wall":
-          // Make the texture repeat (important for DOOM-like aesthetics)
-          textureObject.repeat.set(10, 1); // Adjust repeating as needed
-
-          // Enable mipmapping for better quality at distance
-          textureObject.minFilter = THREE.LinearMipmapLinearFilter;
+          console.log("TEXTTURE", texture);
+          // Fix #2: CRUCIAL - Use different filtering for textures
+          // LinearFilter for both prevents mipmap thrashing
+          textureObject.minFilter = THREE.LinearFilter;
           textureObject.magFilter = THREE.LinearFilter;
+
+          // Fix #3: Only set repeating if absolutely necessary and use integer values
+
+          textureObject.wrapS = textureObject.wrapT = THREE.RepeatWrapping;
+          textureObject.repeat.set(10, 1); // Try with 1 first, then adjust if needed
 
           this.wallTextures.set(texture.name, textureObject);
           break;
+
         case "floor":
-          textureObject.repeat.set(10, 10); // Adjust repeating as needed
+          // Same improvements for floor textures
+          textureObject.minFilter = THREE.LinearFilter;
+          textureObject.magFilter = THREE.LinearFilter;
+
+          textureObject.wrapS = textureObject.wrapT = THREE.RepeatWrapping;
+          textureObject.repeat.set(25, 25);
+
           this.floorTextures.set(texture.name, textureObject);
           break;
+
         default:
           console.error("Unknown texture type");
       }
@@ -152,7 +167,6 @@ export class Level {
 
     this.objects.push(floor);
   }
-
   private createWall(
     x: number,
     y: number,
@@ -164,21 +178,31 @@ export class Level {
     textureKey: string,
     normal: THREE.Vector3
   ): void {
-    const wallGeometry = new THREE.BoxGeometry(width, height, depth);
+    // Fix #4: Use PlaneGeometry instead of BoxGeometry for walls when possible
+    // This prevents texture coordinate issues on the sides
+    let wallGeometry;
+    let isThinWall = false;
+
+    if (depth < 0.1) {
+      // For very thin walls, use PlaneGeometry instead
+      wallGeometry = new THREE.PlaneGeometry(width, height);
+      isThinWall = true;
+    } else {
+      wallGeometry = new THREE.BoxGeometry(width, height, depth);
+    }
 
     // Get texture for this wall
     const texture = this.wallTextures.get(textureKey);
 
-    const wallMaterial = new THREE.MeshStandardMaterial({
+    // Fix #5: Use MeshBasicMaterial instead of MeshStandardMaterial for simpler rendering
+    // This eliminates potential lighting-related glitches
+    const wallMaterial = new THREE.MeshBasicMaterial({
       map: texture,
-      roughness: 0.7,
-      metalness: 0.2,
       side: THREE.DoubleSide,
     });
 
     const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-
-    wall.position.set(x, y + 1.5, z); // Adjust height to sit on floor
+    wall.position.set(x, y + 1.5, z);
     wall.rotation.y = rotation;
 
     this.objects.push(wall);
