@@ -95,9 +95,7 @@ export class Player {
       return;
     }
 
-    // If there's a collision, implement wall sliding
-
-    // 1. First attempt: Project movement along the wall
+    // If there's a collision, implement improved wall sliding for OBBs
     if (collisionInfo.penetration && collisionInfo.collidable) {
       // Get the wall normal (direction to push player out)
       const wallNormal = collisionInfo.penetration.clone().normalize();
@@ -108,9 +106,11 @@ export class Player {
         .clone()
         .sub(wallNormal.clone().multiplyScalar(dot));
 
-      // Scale back to original speed
+      // Scale back to original speed if needed
       if (projectedMove.length() > 0) {
-        projectedMove.normalize().multiplyScalar(this.speed);
+        if (projectedMove.length() > this.speed) {
+          projectedMove.normalize().multiplyScalar(this.speed);
+        }
 
         // Try the projected movement
         const slidingPosition = originalPosition.clone().add(projectedMove);
@@ -125,40 +125,8 @@ export class Player {
       }
     }
 
-    // 2. Second attempt: Try moving along each axis individually
-
-    // Try X movement only
-    const xOnlyMove = new THREE.Vector3(moveVector.x, 0, 0);
-    const xOnlyPosition = originalPosition.clone().add(xOnlyMove);
-
-    // Try Z movement only
-    const zOnlyMove = new THREE.Vector3(0, 0, moveVector.z);
-    const zOnlyPosition = originalPosition.clone().add(zOnlyMove);
-
-    const canMoveX = !collisionSystem.checkCollision(
-      xOnlyPosition,
-      this.collisionRadius
-    );
-    const canMoveZ = !collisionSystem.checkCollision(
-      zOnlyPosition,
-      this.collisionRadius
-    );
-
-    // Apply valid movements
-    if (canMoveX) {
-      this.camera.position.x = xOnlyPosition.x;
-    }
-
-    if (canMoveZ) {
-      this.camera.position.z = zOnlyPosition.z;
-    }
-
-    // If we moved in at least one direction, we've successfully slid along the wall
-    if (canMoveX || canMoveZ) {
-      return;
-    }
-
-    // 3. Final attempt: Find the best sliding direction by testing angles
+    // Improved multi-directional sliding attempts
+    // Try multiple sliding directions at different angles to find the best one
     this.findBestSlidingDirection(
       originalPosition,
       moveVector,
@@ -166,15 +134,8 @@ export class Player {
     );
   }
 
-  public setPosition(position: {
-    x: number;
-    y: number;
-    z: number;
-    rotation: number;
-  }): void {
-    this.camera.position.set(position.x, position.y + 1.5, position.z); // Add height offset for eye level
-    this.camera.rotation.y = position.rotation;
-  }
+  // The findBestSlidingDirection method can remain mostly the same,
+  // but with increased angles to test to better handle diagonal walls:
 
   private findBestSlidingDirection(
     startPos: THREE.Vector3,
@@ -184,8 +145,8 @@ export class Player {
     // Get the normalized moving direction
     const moveDir = moveVector.clone().normalize();
 
-    // Define the number of angles to test
-    const angleCount = 8;
+    // Define the number of angles to test - increased for better coverage
+    const angleCount = 16; // Increased from 8
     const angleStep = Math.PI / (angleCount - 1);
 
     // Test multiple angles to find the best sliding direction
@@ -232,6 +193,16 @@ export class Player {
     if (bestDistance > 0) {
       this.camera.position.copy(bestPosition);
     }
+  }
+
+  public setPosition(position: {
+    x: number;
+    y: number;
+    z: number;
+    rotation: number;
+  }): void {
+    this.camera.position.set(position.x, position.y + 1.5, position.z); // Add height offset for eye level
+    this.camera.rotation.y = position.rotation;
   }
 
   public getPosition(): THREE.Vector3 {

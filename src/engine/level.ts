@@ -17,7 +17,9 @@ export class Level {
   public enemySpawnPoints: EnemySpawnPoint[] = [];
 
   constructor() {
-    this.collisionSystem = new CollisionSystem();
+    // Pass the scene to the collision system for debug visualization
+    this.collisionSystem =
+      new CollisionSystem(/* Uncomment for debug mode: this.scene */);
     this.textureLoader = new THREE.TextureLoader();
     this.wallTextures = new Map();
     this.floorTextures = new Map();

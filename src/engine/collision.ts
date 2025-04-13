@@ -1,27 +1,46 @@
 import * as THREE from "three";
+import { OrientedBoundingBox } from "./orientedBoundingBox";
 
 export interface Collidable {
   mesh: THREE.Mesh;
   getBoundingBox(): THREE.Box3;
+  getOrientedBoundingBox(): OrientedBoundingBox;
 }
 
 export class Wall implements Collidable {
   public mesh: THREE.Mesh;
+  private obb: OrientedBoundingBox;
 
   constructor(mesh: THREE.Mesh) {
     this.mesh = mesh;
+    // Create an OBB for this wall
+    this.obb = OrientedBoundingBox.fromMesh(mesh);
   }
 
   public getBoundingBox(): THREE.Box3 {
     return new THREE.Box3().setFromObject(this.mesh);
+  }
+
+  public getOrientedBoundingBox(): OrientedBoundingBox {
+    // Update the OBB in case the mesh has moved/rotated
+    this.obb.update(this.mesh);
+    return this.obb;
   }
 }
 
 export class CollisionSystem {
   private collidables: Collidable[] = [];
   private wallNormals: Map<Collidable, THREE.Vector3> = new Map();
+  private debugMode: boolean = false;
+  private debugMeshes: THREE.Object3D[] = [];
+  private scene: THREE.Scene | null = null;
 
-  constructor() {}
+  constructor(scene?: THREE.Scene) {
+    if (scene) {
+      this.scene = scene;
+      this.debugMode = true;
+    }
+  }
 
   public addCollidable(collidable: Collidable, normal?: THREE.Vector3): void {
     this.collidables.push(collidable);
@@ -30,16 +49,22 @@ export class CollisionSystem {
     if (normal) {
       this.wallNormals.set(collidable, normal);
     }
+
+    // Add debug visualization if in debug mode
+    if (this.debugMode && this.scene) {
+      const debugMesh = collidable.getOrientedBoundingBox().createDebugMesh();
+      this.debugMeshes.push(debugMesh);
+      this.scene.add(debugMesh);
+    }
   }
 
-  // In collision.ts, add a parameter to identify the object doing the check
   public checkCollision(
     position: THREE.Vector3,
     radius: number = 0.5,
     ignoreObject?: Collidable
   ): boolean {
-    // Create a bounding sphere for the player
-    const playerBoundingSphere = new THREE.Sphere(position, radius);
+    // Create a bounding sphere for the player/entity
+    const boundingSphere = new THREE.Sphere(position, radius);
 
     // Check for collisions with all collidable objects
     for (const collidable of this.collidables) {
@@ -48,10 +73,11 @@ export class CollisionSystem {
         continue;
       }
 
-      const objectBoundingBox = collidable.getBoundingBox();
+      // Get the oriented bounding box for this collidable
+      const obb = collidable.getOrientedBoundingBox();
 
-      // Check if the sphere intersects with the box
-      if (this.sphereIntersectsBox(playerBoundingSphere, objectBoundingBox)) {
+      // Check if the sphere intersects with the OBB
+      if (obb.intersectsSphere(boundingSphere)) {
         return true; // Collision detected
       }
     }
@@ -59,7 +85,6 @@ export class CollisionSystem {
     return false; // No collision
   }
 
-  // Similarly, update getCollisionInfo
   public getCollisionInfo(
     position: THREE.Vector3,
     radius: number = 0.5,
@@ -69,13 +94,16 @@ export class CollisionSystem {
     penetration: THREE.Vector3 | null;
     collidable: Collidable | null;
   } {
-    // Create a bounding sphere for the player
-    const playerBoundingSphere = new THREE.Sphere(position, radius);
+    // Create a bounding sphere for the player/entity
+    const boundingSphere = new THREE.Sphere(position, radius);
     const result = {
       collision: false,
       penetration: null as THREE.Vector3 | null,
       collidable: null as Collidable | null,
     };
+
+    // Track the minimum penetration depth to find the most significant collision
+    let minPenetrationDepth = Infinity;
 
     // Check for collisions with all collidable objects
     for (const collidable of this.collidables) {
@@ -84,114 +112,60 @@ export class CollisionSystem {
         continue;
       }
 
-      const objectBoundingBox = collidable.getBoundingBox();
+      // Get the oriented bounding box for this collidable
+      const obb = collidable.getOrientedBoundingBox();
 
       // Get detailed collision info
-      const collisionInfo = this.sphereBoxCollisionInfo(
-        playerBoundingSphere,
-        objectBoundingBox
-      );
+      const collisionInfo = obb.sphereCollisionInfo(boundingSphere);
 
-      if (collisionInfo.collision) {
+      if (collisionInfo.collision && collisionInfo.penetration) {
         result.collision = true;
-        result.penetration = collisionInfo.penetration;
-        result.collidable = collidable;
-        return result; // Return on first collision (could be improved to find closest/deepest)
+
+        // Calculate the penetration depth
+        const penetrationDepth = collisionInfo.penetration.length();
+
+        // If this is the deepest penetration so far, use it
+        if (penetrationDepth < minPenetrationDepth) {
+          minPenetrationDepth = penetrationDepth;
+          result.penetration = collisionInfo.penetration;
+          result.collidable = collidable;
+        }
       }
     }
 
     return result;
   }
 
-  private sphereIntersectsBox(sphere: THREE.Sphere, box: THREE.Box3): boolean {
-    // Find the closest point on the box to the sphere
-    const closestPoint = new THREE.Vector3();
-    closestPoint.copy(sphere.center);
+  // Update debug visualizations
+  public updateDebugVisualizations(): void {
+    if (!this.debugMode) return;
 
-    // Clamp each coordinate to the box
-    closestPoint.x = Math.max(box.min.x, Math.min(box.max.x, closestPoint.x));
-    closestPoint.y = Math.max(box.min.y, Math.min(box.max.y, closestPoint.y));
-    closestPoint.z = Math.max(box.min.z, Math.min(box.max.z, closestPoint.z));
+    // Remove old debug meshes
+    this.debugMeshes.forEach((mesh) => {
+      if (this.scene) this.scene.remove(mesh);
+    });
+    this.debugMeshes = [];
 
-    // Calculate squared distance between the closest point and sphere center
-    const distanceSquared = closestPoint.distanceToSquared(sphere.center);
-
-    // Check if this distance is less than the radius squared
-    return distanceSquared < sphere.radius * sphere.radius;
+    // Add new debug meshes
+    this.collidables.forEach((collidable) => {
+      const debugMesh = collidable.getOrientedBoundingBox().createDebugMesh();
+      this.debugMeshes.push(debugMesh);
+      if (this.scene) this.scene.add(debugMesh);
+    });
   }
 
-  private sphereBoxCollisionInfo(
-    sphere: THREE.Sphere,
-    box: THREE.Box3
-  ): {
-    collision: boolean;
-    penetration: THREE.Vector3 | null;
-  } {
-    // Find the closest point on the box to the sphere
-    const closestPoint = new THREE.Vector3();
-    closestPoint.copy(sphere.center);
-
-    // Clamp each coordinate to the box
-    closestPoint.x = Math.max(box.min.x, Math.min(box.max.x, closestPoint.x));
-    closestPoint.y = Math.max(box.min.y, Math.min(box.max.y, closestPoint.y));
-    closestPoint.z = Math.max(box.min.z, Math.min(box.max.z, closestPoint.z));
-
-    // Calculate distance between the closest point and sphere center
-    const distance = closestPoint.distanceTo(sphere.center);
-
-    // Check if this distance is less than the radius
-    if (distance < sphere.radius) {
-      // Calculate penetration vector
-      const penetration = new THREE.Vector3();
-
-      if (distance > 0) {
-        // Direction from closest point to sphere center
-        penetration.subVectors(sphere.center, closestPoint).normalize();
-        // Scale by penetration depth
-        penetration.multiplyScalar(sphere.radius - distance);
-      } else {
-        // Sphere center is inside the box, use the shortest exit direction
-        const distToMin = new THREE.Vector3(
-          sphere.center.x - box.min.x,
-          sphere.center.y - box.min.y,
-          sphere.center.z - box.min.z
-        );
-
-        const distToMax = new THREE.Vector3(
-          box.max.x - sphere.center.x,
-          box.max.y - sphere.center.y,
-          box.max.z - sphere.center.z
-        );
-
-        // Find shortest exit
-        if (
-          distToMin.x < distToMax.x &&
-          distToMin.x < distToMin.y &&
-          distToMin.x < distToMin.z
-        ) {
-          penetration.set(-distToMin.x - sphere.radius, 0, 0);
-        } else if (distToMax.x < distToMin.y && distToMax.x < distToMin.z) {
-          penetration.set(distToMax.x + sphere.radius, 0, 0);
-        } else if (distToMin.y < distToMax.y && distToMin.y < distToMin.z) {
-          penetration.set(0, -distToMin.y - sphere.radius, 0);
-        } else if (distToMax.y < distToMin.z) {
-          penetration.set(0, distToMax.y + sphere.radius, 0);
-        } else if (distToMin.z < distToMax.z) {
-          penetration.set(0, 0, -distToMin.z - sphere.radius);
-        } else {
-          penetration.set(0, 0, distToMax.z + sphere.radius);
-        }
-      }
-
-      return {
-        collision: true,
-        penetration: penetration,
-      };
+  // Toggle debug mode
+  public setDebugMode(enabled: boolean, scene?: THREE.Scene): void {
+    this.debugMode = enabled;
+    if (enabled && scene) {
+      this.scene = scene;
+      this.updateDebugVisualizations();
+    } else if (!enabled) {
+      // Remove all debug meshes
+      this.debugMeshes.forEach((mesh) => {
+        if (this.scene) this.scene.remove(mesh);
+      });
+      this.debugMeshes = [];
     }
-
-    return {
-      collision: false,
-      penetration: null,
-    };
   }
 }

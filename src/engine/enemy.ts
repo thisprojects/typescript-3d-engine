@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Collidable, CollisionSystem } from "./collision";
+import { OrientedBoundingBox } from "./orientedBoundingBox";
 import { Player } from "./player";
 
 export enum EnemyState {
@@ -587,13 +588,10 @@ export class Enemy implements Collidable {
     // In a real implementation, you would play death animation and then remove the enemy
   }
 
-  // Implement Collidable interface
   public getBoundingBox(): THREE.Box3 {
     // Create a box that's the right size for the enemy
-    // Don't just use setFromObject which might be including child objects or using a complex mesh
     const box = new THREE.Box3();
     const position = this.mesh.position.clone();
-    const size = this.collisionRadius * 2;
 
     box.min.set(
       position.x - this.collisionRadius,
@@ -608,5 +606,17 @@ export class Enemy implements Collidable {
     );
 
     return box;
+  }
+
+  public getOrientedBoundingBox(): OrientedBoundingBox {
+    // For enemies, we'll use a simple OBB (essentially an AABB since enemies don't rotate)
+    const center = this.mesh.position.clone();
+    const halfSize = new THREE.Vector3(
+      this.collisionRadius,
+      this.collisionRadius,
+      this.collisionRadius
+    );
+
+    return new OrientedBoundingBox(center, halfSize);
   }
 }
