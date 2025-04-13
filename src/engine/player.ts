@@ -26,6 +26,10 @@ export class Player {
   private weaponRange: number = 20;
   private lastShotTime: number = 0;
   private shootCooldown: number = 300; // ms
+  private weaponSprite: THREE.Sprite | null = null;
+  private weaponImage: THREE.Mesh | null = null;
+  private currentWeapon: string = "pistol"; // Default weapon
+  private weaponTextures: Map<string, THREE.Texture> = new Map();
 
   constructor(camera: THREE.PerspectiveCamera, initialPosition?: IPosition) {
     this.camera = camera;
@@ -45,14 +49,96 @@ export class Player {
     // Position camera forward so it rotates around player's position
     this.camera.position.set(0, 0, 0);
 
+    this.loadWeaponTextures();
+
     if (initialPosition) {
       this.setPosition(initialPosition);
     }
   }
 
+  public loadWeaponTextures(): void {
+    const textureLoader = new THREE.TextureLoader();
+
+    // Load weapon textures
+    const weaponTypes = ["pistol", "shotgun", "chaingun"];
+    weaponTypes.forEach((type) => {
+      textureLoader.load(`/weapons/${type}.png`, (texture) => {
+        this.weaponTextures.set(type, texture);
+
+        // If this is the current weapon and we don't have a sprite yet, create it
+        if (type === this.currentWeapon && !this.weaponImage) {
+          this.createWeaponDisplay();
+        }
+      });
+    });
+  }
+
+  public switchWeapon(weaponType: string): void {
+    if (
+      this.currentWeapon === weaponType ||
+      !this.weaponTextures.has(weaponType)
+    )
+      return;
+
+    this.currentWeapon = weaponType;
+
+    // Remove existing weapon display if any
+    if (this.weaponImage) {
+      this.camera.remove(this.weaponImage);
+      this.weaponImage = null;
+    }
+
+    // Create new weapon display
+    this.createWeaponDisplay();
+  }
+
+  private updateWeaponBobbing(deltaTime: number): void {
+    if (!this.weaponImage) return;
+
+    // Simple bobbing effect based on time
+    const bobFrequency = 2; // How fast it bobs
+    const bobAmount = 0.03; // How much it moves
+
+    // Calculate bobbing based on time
+    const bobOffset = Math.sin(Date.now() * 0.005 * bobFrequency) * bobAmount;
+
+    // Apply bobbing to weapon position
+    this.weaponImage.position.y = -0.6 + bobOffset;
+
+    // Add slight rotation for more natural movement
+    this.weaponImage.rotation.z = bobOffset * 0.1;
+  }
+
+  private createWeaponDisplay(): void {
+    if (!this.weaponTextures.has(this.currentWeapon)) return;
+
+    const texture = this.weaponTextures.get(this.currentWeapon)!;
+
+    const aspectRatio = texture.image.width / texture.image.height;
+    const width = 0.7;
+    const height = width / aspectRatio;
+
+    const geometry = new THREE.PlaneGeometry(width, height);
+
+    // Create material with color tint to darken the texture
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      // Add these properties to reduce brightness:
+      color: new THREE.Color(0xaaaaaa),
+    });
+
+    this.weaponImage = new THREE.Mesh(geometry, material);
+    this.weaponImage.position.set(0, -0.6, -1);
+    this.camera.add(this.weaponImage);
+  }
+
   public update(
     inputManager: InputManager,
-    collisionSystem: CollisionSystem
+    collisionSystem: CollisionSystem,
+    deltaTime: number
   ): void {
     // Get mouse movement delta
     const mouseMovement = inputManager.getMouseMovement();
@@ -174,6 +260,8 @@ export class Player {
       moveVector,
       collisionSystem
     );
+
+    this.updateWeaponBobbing(deltaTime);
   }
 
   private findBestSlidingDirection(
@@ -327,6 +415,20 @@ export class Player {
       // We need to calculate if the ray hits the enemy
       // In a real implementation, you would use raycaster.intersectObject
       // For simplicity, we'll use a distance-based approach
+
+      // Add muzzle flash or shooting animation
+      if (this.weaponImage) {
+        // Simulate recoil by moving the weapon up slightly
+        const recoilAmount = 0.05;
+        this.weaponImage.position.y += recoilAmount;
+
+        // Reset after a short time
+        setTimeout(() => {
+          if (this.weaponImage) {
+            this.weaponImage.position.y -= recoilAmount;
+          }
+        }, 50);
+      }
 
       const direction = this.getDirection();
       const enemyPosition = enemy.mesh.position;

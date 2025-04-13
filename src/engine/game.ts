@@ -77,7 +77,11 @@ export class Game {
     }
 
     // Update player based on input, passing collision system
-    this.player.update(this.inputManager, this.level.collisionSystem);
+    this.player.update(
+      this.inputManager,
+      this.level.collisionSystem,
+      deltaTime
+    );
 
     // Handle shooting
     if (this.inputManager.isKeyPressed(Key.SPACE)) {
