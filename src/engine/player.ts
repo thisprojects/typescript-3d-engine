@@ -6,9 +6,14 @@ import { Enemy } from "./enemy";
 
 export class Player {
   private camera: THREE.PerspectiveCamera;
+  // New objects for rotation handling
+  private cameraHolder: THREE.Object3D; // For yaw (left/right rotation)
+  private cameraPitch: THREE.Object3D; // For pitch (up/down rotation)
+
   private velocity: THREE.Vector3;
   private speed: number = 0.2;
   private lookSensitivity: number = 0.002;
+  private maxPitchAngle: number = Math.PI / 2.5; // Limit vertical rotation to avoid flipping
   private collisionRadius: number = 1.5; // Player collision radius
   private health: number = 100;
   private maxHealth: number = 100;
@@ -26,6 +31,20 @@ export class Player {
     this.camera = camera;
     this.velocity = new THREE.Vector3();
 
+    // Create hierarchy for rotation handling
+    this.cameraHolder = new THREE.Object3D(); // Handles yaw (left/right)
+    this.cameraPitch = new THREE.Object3D(); // Handles pitch (up/down)
+
+    // Setup hierarchy
+    this.cameraHolder.add(this.cameraPitch);
+    this.cameraPitch.add(this.camera);
+
+    // Reset camera's rotation since we'll control it through the parent objects
+    this.camera.rotation.set(0, 0, 0);
+
+    // Position camera forward so it rotates around player's position
+    this.camera.position.set(0, 0, 0);
+
     if (initialPosition) {
       this.setPosition(initialPosition);
     }
@@ -37,7 +56,18 @@ export class Player {
   ): void {
     // Handle mouse movement for looking around
     const mouseMovement = inputManager.getMouseMovement();
-    this.camera.rotation.y -= mouseMovement.x * this.lookSensitivity;
+
+    // Apply yaw rotation (left/right) to the holder object
+    this.cameraHolder.rotation.y -= mouseMovement.x * this.lookSensitivity;
+
+    // Apply pitch rotation (up/down) to the pitch object, with limits
+    this.cameraPitch.rotation.x -= mouseMovement.y * this.lookSensitivity;
+
+    // Clamp the pitch to avoid flipping over
+    this.cameraPitch.rotation.x = Math.max(
+      -this.maxPitchAngle,
+      Math.min(this.maxPitchAngle, this.cameraPitch.rotation.x)
+    );
 
     // Handle keyboard movement
     const direction = new THREE.Vector3();
@@ -64,13 +94,14 @@ export class Player {
     }
 
     // Apply movement in camera direction
+    // Get forward and right vectors from the cameraHolder (using yaw only for movement)
     const forward = new THREE.Vector3(0, 0, -1);
-    forward.applyQuaternion(this.camera.quaternion);
+    forward.applyQuaternion(this.cameraHolder.quaternion);
     forward.y = 0; // Keep movement on horizontal plane
     forward.normalize();
 
     const right = new THREE.Vector3(1, 0, 0);
-    right.applyQuaternion(this.camera.quaternion);
+    right.applyQuaternion(this.cameraHolder.quaternion);
     right.y = 0;
     right.normalize();
 
@@ -80,7 +111,7 @@ export class Player {
     moveVector.add(right.clone().multiplyScalar(direction.x * this.speed));
 
     // Store current position for rollback if needed
-    const originalPosition = this.camera.position.clone();
+    const originalPosition = this.cameraHolder.position.clone();
 
     // Try to move in the desired direction
     const newPosition = originalPosition.clone().add(moveVector);
@@ -91,7 +122,7 @@ export class Player {
 
     if (!collisionInfo.collision) {
       // No collision, move freely
-      this.camera.position.copy(newPosition);
+      this.cameraHolder.position.copy(newPosition);
       return;
     }
 
@@ -119,23 +150,19 @@ export class Player {
           !collisionSystem.checkCollision(slidingPosition, this.collisionRadius)
         ) {
           // Sliding successful
-          this.camera.position.copy(slidingPosition);
+          this.cameraHolder.position.copy(slidingPosition);
           return;
         }
       }
     }
 
     // Improved multi-directional sliding attempts
-    // Try multiple sliding directions at different angles to find the best one
     this.findBestSlidingDirection(
       originalPosition,
       moveVector,
       collisionSystem
     );
   }
-
-  // The findBestSlidingDirection method can remain mostly the same,
-  // but with increased angles to test to better handle diagonal walls:
 
   private findBestSlidingDirection(
     startPos: THREE.Vector3,
@@ -191,7 +218,7 @@ export class Player {
 
     // Apply the best sliding position if we found one
     if (bestDistance > 0) {
-      this.camera.position.copy(bestPosition);
+      this.cameraHolder.position.copy(bestPosition);
     }
   }
 
@@ -201,17 +228,24 @@ export class Player {
     z: number;
     rotation: number;
   }): void {
-    this.camera.position.set(position.x, position.y + 1.5, position.z); // Add height offset for eye level
-    this.camera.rotation.y = position.rotation;
+    // Set position of the camera holder
+    this.cameraHolder.position.set(position.x, position.y + 1.5, position.z); // Add height offset for eye level
+    this.cameraHolder.rotation.y = position.rotation;
+
+    // Reset pitch when setting position
+    this.cameraPitch.rotation.x = 0;
   }
 
   public getPosition(): THREE.Vector3 {
-    return this.camera.position.clone();
+    return this.cameraHolder.position.clone();
   }
 
   public getDirection(): THREE.Vector3 {
+    // Get the actual camera direction based on both yaw and pitch
     const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyQuaternion(this.camera.quaternion);
+    direction.applyQuaternion(
+      this.camera.getWorldQuaternion(new THREE.Quaternion())
+    );
     return direction.normalize();
   }
 
@@ -284,7 +318,7 @@ export class Player {
 
       const direction = this.getDirection();
       const enemyPosition = enemy.mesh.position;
-      const playerPosition = this.camera.position;
+      const playerPosition = this.cameraHolder.position;
 
       // Vector from player to enemy
       const toEnemy = enemyPosition.clone().sub(playerPosition);
@@ -339,5 +373,15 @@ export class Player {
 
   public getArmor(): number {
     return this.armor;
+  }
+
+  // Add method to get the camera object (needed for the renderer)
+  public getCamera(): THREE.PerspectiveCamera {
+    return this.camera;
+  }
+
+  // Add method to get the cameraHolder (needed for adding to scene)
+  public getCameraHolder(): THREE.Object3D {
+    return this.cameraHolder;
   }
 }

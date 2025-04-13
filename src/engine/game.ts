@@ -20,17 +20,22 @@ export class Game {
     this.inputManager = new InputManager();
     this.level = new Level();
     const spawnPoint = this.level.getSpawnPoint();
-    this.player = new Player(this.renderer["camera"], spawnPoint); // Access camera from renderer
+
+    // Create the player with the camera from the renderer
+    this.player = new Player(this.renderer.getCamera(), spawnPoint);
+
+    // Add the player's camera holder to the scene
+    this.renderer.addObject(this.player.getCameraHolder());
 
     this.enemyManager = new EnemyManager(
-      this.renderer["scene"],
+      this.renderer.getScene(),
       this.level.collisionSystem
     );
 
     // Spawn enemies from level data
     this.enemyManager.spawnEnemiesFromPoints(this.level.enemySpawnPoints);
 
-    // Add level objects to renderer - IS THIS EVEN NEEDED NOW?
+    // Add level objects to renderer
     this.level.objects.forEach((object) => {
       this.renderer.addObject(object);
     });
@@ -87,7 +92,15 @@ export class Game {
   public restart(): void {
     // Reset player
     const spawnPoint = this.level.getSpawnPoint();
-    this.player = new Player(this.renderer["camera"], spawnPoint);
+
+    // Remove old camera holder from scene
+    this.renderer.removeObject(this.player.getCameraHolder());
+
+    // Create new player
+    this.player = new Player(this.renderer.getCamera(), spawnPoint);
+
+    // Add new camera holder to scene
+    this.renderer.addObject(this.player.getCameraHolder());
 
     // Reset enemies
     this.enemyManager.clearEnemies();

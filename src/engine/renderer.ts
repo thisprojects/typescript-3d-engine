@@ -17,7 +17,6 @@ export class Renderer {
       0.5, // Near clipping plane
       1000 // Far clipping plane
     );
-    this.camera.position.z = 5;
 
     // Initialize renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -32,6 +31,10 @@ export class Renderer {
     this.scene.add(object);
   }
 
+  public removeObject(object: THREE.Object3D): void {
+    this.scene.remove(object);
+  }
+
   public render(): void {
     this.renderer.render(this.scene, this.camera);
   }
@@ -40,5 +43,14 @@ export class Renderer {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // Add getters for camera and scene
+  public getCamera(): THREE.PerspectiveCamera {
+    return this.camera;
+  }
+
+  public getScene(): THREE.Scene {
+    return this.scene;
   }
 }
