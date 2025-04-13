@@ -3,7 +3,7 @@ import { CollisionSystem, Wall } from "./collision";
 
 import { ILevel, IRoom, ITexture } from "../types/level";
 import level1 from "../maps/map.json";
-import { EnemySpawnPoint } from "./enemymanager";
+import { EnemySpawnPoint } from "./enemyManager";
 import { EnemyType } from "./enemy";
 
 export class Level {

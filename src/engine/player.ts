@@ -9,7 +9,7 @@ export class Player {
   private velocity: THREE.Vector3;
   private speed: number = 0.2;
   private lookSensitivity: number = 0.002;
-  private collisionRadius: number = 0.5; // Player collision radius
+  private collisionRadius: number = 1.5; // Player collision radius
   private health: number = 100;
   private maxHealth: number = 100;
   private armor: number = 0;

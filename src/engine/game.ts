@@ -3,7 +3,7 @@ import { Renderer } from "./renderer";
 import { InputManager, Key } from "./input";
 import { Player } from "./player";
 import { Level } from "./level";
-import { EnemyManager } from "./enemymanager";
+import { EnemyManager } from "./enemyManager";
 
 export class Game {
   private renderer: Renderer;

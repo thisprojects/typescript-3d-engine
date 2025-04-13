@@ -32,15 +32,22 @@ export class CollisionSystem {
     }
   }
 
+  // In collision.ts, add a parameter to identify the object doing the check
   public checkCollision(
     position: THREE.Vector3,
-    radius: number = 0.5
+    radius: number = 0.5,
+    ignoreObject?: Collidable
   ): boolean {
     // Create a bounding sphere for the player
     const playerBoundingSphere = new THREE.Sphere(position, radius);
 
     // Check for collisions with all collidable objects
     for (const collidable of this.collidables) {
+      // Skip if this is the object we're checking for (self-collision prevention)
+      if (ignoreObject && collidable === ignoreObject) {
+        continue;
+      }
+
       const objectBoundingBox = collidable.getBoundingBox();
 
       // Check if the sphere intersects with the box
@@ -52,9 +59,11 @@ export class CollisionSystem {
     return false; // No collision
   }
 
+  // Similarly, update getCollisionInfo
   public getCollisionInfo(
     position: THREE.Vector3,
-    radius: number = 0.5
+    radius: number = 0.5,
+    ignoreObject?: Collidable
   ): {
     collision: boolean;
     penetration: THREE.Vector3 | null;
@@ -70,6 +79,11 @@ export class CollisionSystem {
 
     // Check for collisions with all collidable objects
     for (const collidable of this.collidables) {
+      // Skip if this is the object we're checking for (self-collision prevention)
+      if (ignoreObject && collidable === ignoreObject) {
+        continue;
+      }
+
       const objectBoundingBox = collidable.getBoundingBox();
 
       // Get detailed collision info

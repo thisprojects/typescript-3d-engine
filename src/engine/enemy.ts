@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Collidable } from "./collision";
+import { Collidable, CollisionSystem } from "./collision";
 import { Player } from "./player";
 
 export enum EnemyState {
@@ -71,6 +71,7 @@ export class Enemy implements Collidable {
   public damage: number;
   public attackRange: number;
   public detectionRange: number;
+  public collisionRadius: number = 1; // Enemy collision radius
 
   // For navigation
   public targetPosition: THREE.Vector3 = new THREE.Vector3();
@@ -137,7 +138,11 @@ export class Enemy implements Collidable {
     */
   }
 
-  public update(deltaTime: number, player: Player): void {
+  public update(
+    deltaTime: number,
+    player: Player,
+    collisionSystem: CollisionSystem
+  ): void {
     // Update animation mixer if it exists
     if (this.animationMixer) {
       this.animationMixer.update(deltaTime / 1000);
@@ -159,11 +164,11 @@ export class Enemy implements Collidable {
         break;
 
       case EnemyState.PATROLLING:
-        this.handlePatrolState();
+        this.handlePatrolState(collisionSystem);
         break;
 
       case EnemyState.CHASING:
-        this.handleChaseState(playerPosition);
+        this.handleChaseState(playerPosition, collisionSystem);
         break;
 
       case EnemyState.ATTACKING:
@@ -287,7 +292,7 @@ export class Enemy implements Collidable {
     }
   }
 
-  public handlePatrolState(): void {
+  public handlePatrolState(collisionSystem: CollisionSystem): void {
     // If no patrol path or reached end of path, generate a new one
     if (
       this.patrolPath.length === 0 ||
@@ -306,15 +311,22 @@ export class Enemy implements Collidable {
         // Reached waypoint, move to next one
         this.currentPathIndex++;
       } else {
-        // Move towards waypoint
-        this.moveTowards(targetPoint, this.speed * 0.5);
+        // Move towards waypoint with collision detection
+        this.moveTowardsWithCollision(
+          targetPoint,
+          this.speed * 0.5,
+          collisionSystem
+        );
       }
     }
   }
 
-  public handleChaseState(playerPosition: THREE.Vector3): void {
-    // Move towards player
-    this.moveTowards(playerPosition, this.speed);
+  public handleChaseState(
+    playerPosition: THREE.Vector3,
+    collisionSystem: CollisionSystem
+  ): void {
+    // Move towards player with collision detection
+    this.moveTowardsWithCollision(playerPosition, this.speed, collisionSystem);
   }
 
   public handleAttackState(
@@ -343,6 +355,193 @@ export class Enemy implements Collidable {
     this.mesh.position.addScaledVector(this.moveDirection, speed);
   }
 
+  public moveTowardsWithCollision(
+    target: THREE.Vector3,
+    speed: number,
+    collisionSystem: CollisionSystem
+  ): void {
+    // Calculate direction to target
+    this.moveDirection.subVectors(target, this.mesh.position).normalize();
+
+    // Keep y-coordinate constant
+    this.moveDirection.y = 0;
+
+    // Store current position for rollback if needed
+    const originalPosition = this.mesh.position.clone();
+
+    // Calculate potential new position
+    const moveVector = this.moveDirection.clone().multiplyScalar(speed);
+    const newPosition = originalPosition.clone().add(moveVector);
+
+    // Check for collision, ignoring self
+    const collisionInfo = collisionSystem.getCollisionInfo(
+      newPosition,
+      this.collisionRadius,
+      this // Pass the enemy itself to ignore self-collision
+    );
+
+    if (!collisionInfo.collision) {
+      // No collision, move freely
+      this.mesh.position.copy(newPosition);
+      return;
+    }
+
+    console.log("COLLISION", collisionInfo.collidable);
+
+    // If there's a collision, implement wall sliding
+
+    // 1. First attempt: Project movement along the wall
+    if (collisionInfo.penetration && collisionInfo.collidable) {
+      // Get the wall normal (direction to push enemy out)
+      const wallNormal = collisionInfo.penetration.clone().normalize();
+
+      // Project the movement vector onto the wall plane
+      const dot = moveVector.dot(wallNormal);
+      const projectedMove = moveVector
+        .clone()
+        .sub(wallNormal.clone().multiplyScalar(dot));
+
+      // Scale back to original speed
+      if (projectedMove.length() > 0) {
+        projectedMove.normalize().multiplyScalar(speed);
+
+        // Try the projected movement
+        const slidingPosition = originalPosition.clone().add(projectedMove);
+
+        if (
+          !collisionSystem.checkCollision(slidingPosition, this.collisionRadius)
+        ) {
+          // Sliding successful
+          this.mesh.position.copy(slidingPosition);
+          return;
+        }
+      }
+    }
+
+    // 2. Second attempt: Try moving along each axis individually
+    const xOnlyMove = new THREE.Vector3(moveVector.x, 0, 0);
+    const xOnlyPosition = originalPosition.clone().add(xOnlyMove);
+
+    const zOnlyMove = new THREE.Vector3(0, 0, moveVector.z);
+    const zOnlyPosition = originalPosition.clone().add(zOnlyMove);
+
+    const canMoveX = !collisionSystem.checkCollision(
+      xOnlyPosition,
+      this.collisionRadius
+    );
+    const canMoveZ = !collisionSystem.checkCollision(
+      zOnlyPosition,
+      this.collisionRadius
+    );
+
+    // Apply valid movements
+    if (canMoveX) {
+      this.mesh.position.x = xOnlyPosition.x;
+    }
+
+    if (canMoveZ) {
+      this.mesh.position.z = zOnlyPosition.z;
+    }
+
+    // If we moved in at least one direction, we've successfully slid along the wall
+    if (canMoveX || canMoveZ) {
+      return;
+    }
+
+    // 3. Final attempt: Find the best sliding direction
+    this.findBestSlidingDirection(
+      originalPosition,
+      moveVector,
+      collisionSystem
+    );
+
+    // Rest of the wall sliding logic...
+    // Also update all collisionSystem.checkCollision calls to pass 'this' as ignoreObject
+    // For example:
+    // if (!collisionSystem.checkCollision(slidingPosition, this.collisionRadius, this))
+  }
+
+  public createCollisionVisualization(scene: THREE.Scene): void {
+    // Create a wireframe sphere to show the collision radius
+    const geo = new THREE.SphereGeometry(this.collisionRadius, 16, 16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      wireframe: true,
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+
+    // Position at the enemy's position
+    sphere.position.copy(this.mesh.position);
+
+    // Add to scene
+    scene.add(sphere);
+
+    // Update position in the update method
+    const updatePosition = () => {
+      sphere.position.copy(this.mesh.position);
+      requestAnimationFrame(updatePosition);
+    };
+    updatePosition();
+  }
+
+  private findBestSlidingDirection(
+    startPos: THREE.Vector3,
+    moveVector: THREE.Vector3,
+    collisionSystem: CollisionSystem
+  ): void {
+    // Get the normalized moving direction
+    const moveDir = moveVector.clone().normalize();
+
+    // Define the number of angles to test
+    const angleCount = 8;
+    const angleStep = Math.PI / (angleCount - 1);
+
+    // Test multiple angles to find the best sliding direction
+    let bestDistance = 0;
+    let bestPosition = startPos.clone();
+
+    for (let i = 0; i < angleCount; i++) {
+      // Calculate test angle (-90 to +90 degrees from original direction)
+      const angle = -Math.PI / 2 + i * angleStep;
+
+      // Create a rotated movement vector
+      const rotatedDir = new THREE.Vector3(
+        moveDir.x * Math.cos(angle) - moveDir.z * Math.sin(angle),
+        0,
+        moveDir.x * Math.sin(angle) + moveDir.z * Math.cos(angle)
+      );
+
+      // Scale to desired speed
+      rotatedDir.multiplyScalar(moveVector.length());
+
+      // Calculate test position
+      const testPos = startPos.clone().add(rotatedDir);
+
+      // Skip if collision at this position
+      if (collisionSystem.checkCollision(testPos, this.collisionRadius)) {
+        continue;
+      }
+
+      // Calculate how well this direction maintains our original intent
+      // (dot product with original direction, higher is better)
+      const dotWithOriginal = rotatedDir.dot(moveVector) / moveVector.length();
+
+      // Weight based on how far we can move and how close to original direction
+      const effectiveDistance =
+        rotatedDir.length() * Math.max(0, dotWithOriginal);
+
+      if (effectiveDistance > bestDistance) {
+        bestDistance = effectiveDistance;
+        bestPosition = testPos;
+      }
+    }
+
+    // Apply the best sliding position if we found one
+    if (bestDistance > 0) {
+      this.mesh.position.copy(bestPosition);
+    }
+  }
+
   public generatePatrolPath(): void {
     // Generate a random patrol path around current position
     this.patrolPath = [];
@@ -362,7 +561,7 @@ export class Enemy implements Collidable {
   public attackPlayer(player: Player): void {
     console.log(`Enemy attacking player with ${this.damage} damage`);
     // In an actual implementation, you would call a damage function on the player
-    // player.takeDamage(this.damage);
+    player.takeDamage(this.damage);
 
     // Play attack animation
     this.playAnimation("attack");
@@ -390,6 +589,24 @@ export class Enemy implements Collidable {
 
   // Implement Collidable interface
   public getBoundingBox(): THREE.Box3 {
-    return new THREE.Box3().setFromObject(this.mesh);
+    // Create a box that's the right size for the enemy
+    // Don't just use setFromObject which might be including child objects or using a complex mesh
+    const box = new THREE.Box3();
+    const position = this.mesh.position.clone();
+    const size = this.collisionRadius * 2;
+
+    box.min.set(
+      position.x - this.collisionRadius,
+      position.y - this.collisionRadius,
+      position.z - this.collisionRadius
+    );
+
+    box.max.set(
+      position.x + this.collisionRadius,
+      position.y + this.collisionRadius,
+      position.z + this.collisionRadius
+    );
+
+    return box;
   }
 }

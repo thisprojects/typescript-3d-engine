@@ -28,7 +28,9 @@ export class EnemyManager {
     this.scene.add(enemy.mesh);
 
     // Add enemy to collision system
-    this.collisionSystem.addCollidable(enemy);
+    // ONLY do this if enemies need to collide with each other
+    // If enemies shouldn't block each other, comment this out:
+    // this.collisionSystem.addCollidable(enemy);
 
     // Add to enemies array
     this.enemies.push(enemy);
@@ -44,7 +46,8 @@ export class EnemyManager {
 
   public update(deltaTime: number, player: Player): void {
     this.enemies.forEach((enemy) => {
-      enemy.update(deltaTime, player);
+      // Pass the collision system to the enemy update method
+      enemy.update(deltaTime, player, this.collisionSystem);
     });
   }
 
