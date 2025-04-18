@@ -31,6 +31,16 @@ export class Player {
   private currentWeapon: string = "pistol"; // Default weapon
   private weaponTextures: Map<string, THREE.Texture> = new Map();
 
+  // Physics properties
+  private gravity: number = 0.01;
+  private verticalVelocity: number = 0;
+  private jumpForce: number = 0.3;
+  private isOnGround: boolean = false;
+  private standingHeight: number = 1.5; // Eye level height when standing
+  private playerHeight: number = 3.0; // Total height of player for ground detection
+  private lastJumpTime: number = 0;
+  private jumpCooldown: number = 200; // ms - prevent jump spamming
+
   constructor(camera: THREE.PerspectiveCamera, initialPosition?: IPosition) {
     this.camera = camera;
     this.velocity = new THREE.Vector3();
@@ -186,8 +196,15 @@ export class Player {
       direction.x = 1;
     }
 
-    // No movement input, skip the rest
-    if (direction.length() === 0) return;
+    // Apply physics for vertical movement
+    this.updateVerticalMovement(inputManager, collisionSystem, deltaTime);
+
+    // No horizontal movement input, skip the rest of horizontal movement
+    if (direction.length() === 0) {
+      // Update weapon bobbing even if not moving horizontally
+      this.updateWeaponBobbing(deltaTime);
+      return;
+    }
 
     // Normalize direction vector
     direction.normalize();
@@ -209,8 +226,10 @@ export class Player {
     // Current position
     const originalPosition = this.cameraHolder.position.clone();
 
-    // Calculate new position
-    const newPosition = originalPosition.clone().add(moveVector);
+    // Calculate new position (only update x and z, y is handled by physics)
+    const newPosition = originalPosition.clone();
+    newPosition.x += moveVector.x;
+    newPosition.z += moveVector.z;
 
     // Check for collisions
     const collisionInfo = collisionSystem.getCollisionInfo(
@@ -219,8 +238,10 @@ export class Player {
     );
 
     if (!collisionInfo.collision) {
-      // No collision, move freely
-      this.cameraHolder.position.copy(newPosition);
+      // No collision, move freely (but only update x and z)
+      this.cameraHolder.position.x = newPosition.x;
+      this.cameraHolder.position.z = newPosition.z;
+      this.updateWeaponBobbing(deltaTime);
       return;
     }
 
@@ -241,14 +262,18 @@ export class Player {
           projectedMove.normalize().multiplyScalar(this.speed);
         }
 
-        // Try the projected movement
-        const slidingPosition = originalPosition.clone().add(projectedMove);
+        // Try the projected movement (only x and z)
+        const slidingPosition = originalPosition.clone();
+        slidingPosition.x += projectedMove.x;
+        slidingPosition.z += projectedMove.z;
 
         if (
           !collisionSystem.checkCollision(slidingPosition, this.collisionRadius)
         ) {
           // Sliding successful
-          this.cameraHolder.position.copy(slidingPosition);
+          this.cameraHolder.position.x = slidingPosition.x;
+          this.cameraHolder.position.z = slidingPosition.z;
+          this.updateWeaponBobbing(deltaTime);
           return;
         }
       }
@@ -262,6 +287,100 @@ export class Player {
     );
 
     this.updateWeaponBobbing(deltaTime);
+  }
+
+  // Replace your entire updateVerticalMovement method with this implementation
+  private updateVerticalMovement(
+    inputManager: InputManager,
+    collisionSystem: CollisionSystem,
+    deltaTime: number
+  ): void {
+    // Normalize deltaTime to avoid physics issues at different frame rates
+    const dt = Math.min(deltaTime / 16.67, 2.0); // Cap at 2x normal time step
+
+    // Apply gravity to vertical velocity
+    this.verticalVelocity -= this.gravity * dt;
+
+    // Check for jump input - only when on ground
+    if (inputManager.isKeyPressed(Key.SPACE) && this.isOnGround) {
+      const currentTime = Date.now();
+      if (currentTime - this.lastJumpTime > this.jumpCooldown) {
+        this.verticalVelocity = this.jumpForce;
+        this.isOnGround = false;
+        this.lastJumpTime = currentTime;
+      }
+    }
+
+    // Store current position
+    const currentPosition = this.cameraHolder.position.clone();
+
+    // Ground detection using the specialized method
+    // Note: We need to add this method to CollisionSystem first
+    const groundCheck = collisionSystem.checkGroundCollision(
+      currentPosition,
+      this.collisionRadius,
+      this.playerHeight
+    );
+
+    // Handle ground collision
+    if (groundCheck.collision && groundCheck.groundY !== null) {
+      // Only consider it ground if we're moving downward or already on ground
+      if (this.verticalVelocity <= 0) {
+        // Calculate the appropriate Y position (feet at ground level)
+        const targetY = groundCheck.groundY + this.standingHeight;
+
+        // If we're close to the ground or below it
+        if (currentPosition.y <= targetY + 0.1) {
+          // Snap to ground position
+          this.cameraHolder.position.y = targetY;
+          this.verticalVelocity = 0;
+          this.isOnGround = true;
+          return; // Exit early, no need for further movement
+        }
+      }
+    } else {
+      // No ground detected below
+      this.isOnGround = false;
+    }
+
+    // Ceiling collision check when moving upward
+    if (this.verticalVelocity > 0) {
+      // Position to check (top of player)
+      const headPosition = currentPosition.clone();
+      headPosition.y += this.standingHeight * 0.5;
+
+      // Check for collision at the head position with upward movement applied
+      const ceilingCheck = collisionSystem.getCollisionInfo(
+        new THREE.Vector3(
+          headPosition.x,
+          headPosition.y + this.verticalVelocity * dt,
+          headPosition.z
+        ),
+        this.collisionRadius * 0.5
+      );
+
+      if (ceilingCheck.collision) {
+        // Hit ceiling, stop upward momentum
+        this.verticalVelocity = 0;
+      }
+    }
+
+    // Apply vertical movement
+    this.cameraHolder.position.y += this.verticalVelocity * dt;
+
+    // Terminal velocity limit to prevent falling too fast
+    const terminalVelocity = -0.5;
+    if (this.verticalVelocity < terminalVelocity) {
+      this.verticalVelocity = terminalVelocity;
+    }
+
+    // Absolute minimum Y position as a failsafe
+    const absoluteMinY = 0.5; // Adjust based on your level's floor height
+    if (this.cameraHolder.position.y < absoluteMinY + this.standingHeight) {
+      this.cameraHolder.position.y = absoluteMinY + this.standingHeight;
+      this.verticalVelocity = 0;
+      this.isOnGround = true;
+    }
   }
 
   private findBestSlidingDirection(
@@ -294,8 +413,10 @@ export class Player {
       // Scale to desired speed
       rotatedDir.multiplyScalar(this.speed);
 
-      // Calculate test position
-      const testPos = startPos.clone().add(rotatedDir);
+      // Calculate test position (only update x and z)
+      const testPos = startPos.clone();
+      testPos.x += rotatedDir.x;
+      testPos.z += rotatedDir.z;
 
       // Skip if collision at this position
       if (collisionSystem.checkCollision(testPos, this.collisionRadius)) {
@@ -316,9 +437,10 @@ export class Player {
       }
     }
 
-    // Apply the best sliding position if we found one
+    // Apply the best sliding position if we found one (only update x and z)
     if (bestDistance > 0) {
-      this.cameraHolder.position.copy(bestPosition);
+      this.cameraHolder.position.x = bestPosition.x;
+      this.cameraHolder.position.z = bestPosition.z;
     }
   }
 
@@ -334,6 +456,10 @@ export class Player {
 
     // Reset pitch when setting position
     this.cameraPitch.rotation.x = 0;
+
+    // Reset physics state
+    this.verticalVelocity = 0;
+    this.isOnGround = false; // Will be updated in the next frame
   }
 
   public getPosition(): THREE.Vector3 {

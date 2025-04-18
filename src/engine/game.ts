@@ -83,11 +83,6 @@ export class Game {
       deltaTime
     );
 
-    // Handle shooting
-    if (this.inputManager.isKeyPressed(Key.SPACE)) {
-      this.player.shoot(this.enemyManager.getEnemies());
-    }
-
     // Update enemies
     this.enemyManager.update(deltaTime, this.player);
     this.enemyManager.removeDeadEnemies();
