@@ -136,6 +136,77 @@ export class CollisionSystem {
     return result;
   }
 
+  public checkGroundCollision(
+    position: THREE.Vector3,
+    radius: number = 0.5,
+    height: number = 3.0,
+    ignoreObject?: Collidable
+  ): {
+    collision: boolean;
+    groundY: number | null;
+    normal: THREE.Vector3 | null;
+    collidable: Collidable | null;
+  } {
+    const result = {
+      collision: false,
+      groundY: null as number | null,
+      normal: null as THREE.Vector3 | null,
+      collidable: null as Collidable | null,
+    };
+
+    // Cast a ray downward from position
+    const rayStart = position.clone();
+    const rayEnd = position.clone();
+    rayEnd.y -= height; // Cast down by the player height
+
+    // Check each collidable for intersection
+    for (const collidable of this.collidables) {
+      // Skip self-collision if needed
+      if (ignoreObject && collidable === ignoreObject) {
+        continue;
+      }
+
+      // Get the OBB for this collidable
+      const obb = collidable.getOrientedBoundingBox();
+
+      // Create a sphere at the current ray position for collision checks
+      const testSphere = new THREE.Sphere(rayStart.clone(), radius);
+
+      // Test multiple points along the ray by moving the sphere down
+      const steps = 10; // Number of test points along the ray
+      const stepSize = height / steps;
+
+      for (let i = 0; i <= steps; i++) {
+        // Position the test sphere at this step along the ray
+        testSphere.center
+          .copy(rayStart)
+          .sub(new THREE.Vector3(0, i * stepSize, 0));
+
+        // Check for collision at this point
+        const collisionInfo = obb.sphereCollisionInfo(testSphere);
+
+        if (collisionInfo.collision && collisionInfo.penetration) {
+          result.collision = true;
+          result.groundY = testSphere.center.y + testSphere.radius;
+          result.normal = collisionInfo.penetration.clone().normalize();
+          result.collidable = collidable;
+
+          // If this is a wall (not a floor), we might want to ignore it
+          // Check if the normal is pointing mostly upward
+          if (result.normal && result.normal.y > 0.7) {
+            // This is likely a floor, not a wall - exit early
+            return result;
+          }
+
+          // If it's a wall (normal is horizontal), continue checking
+          // as there might be a floor below
+        }
+      }
+    }
+
+    return result;
+  }
+
   // Update debug visualizations
   public updateDebugVisualizations(): void {
     if (!this.debugMode) return;

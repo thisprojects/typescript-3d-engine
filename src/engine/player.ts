@@ -289,15 +289,19 @@ export class Player {
     this.updateWeaponBobbing(deltaTime);
   }
 
+  // Replace your entire updateVerticalMovement method with this implementation
   private updateVerticalMovement(
     inputManager: InputManager,
     collisionSystem: CollisionSystem,
     deltaTime: number
   ): void {
-    // Apply gravity to vertical velocity
-    this.verticalVelocity -= this.gravity * deltaTime * 0.5; // Scale with deltaTime
+    // Normalize deltaTime to avoid physics issues at different frame rates
+    const dt = Math.min(deltaTime / 16.67, 2.0); // Cap at 2x normal time step
 
-    // Check for jump input
+    // Apply gravity to vertical velocity
+    this.verticalVelocity -= this.gravity * dt;
+
+    // Check for jump input - only when on ground
     if (inputManager.isKeyPressed(Key.SPACE) && this.isOnGround) {
       const currentTime = Date.now();
       if (currentTime - this.lastJumpTime > this.jumpCooldown) {
@@ -307,72 +311,75 @@ export class Player {
       }
     }
 
-    // Calculate new vertical position
-    const newPosition = this.cameraHolder.position.clone();
-    newPosition.y += this.verticalVelocity;
+    // Store current position
+    const currentPosition = this.cameraHolder.position.clone();
 
-    // Ground detection
-    // Cast a ray downward to detect the ground
-    const startPos = this.cameraHolder.position.clone();
-    startPos.y -= this.standingHeight; // Start from foot position
+    // Ground detection using the specialized method
+    // Note: We need to add this method to CollisionSystem first
+    const groundCheck = collisionSystem.checkGroundCollision(
+      currentPosition,
+      this.collisionRadius,
+      this.playerHeight
+    );
 
-    const endPos = startPos.clone();
-    endPos.y -= 0.2; // Check a small distance below feet
+    // Handle ground collision
+    if (groundCheck.collision && groundCheck.groundY !== null) {
+      // Only consider it ground if we're moving downward or already on ground
+      if (this.verticalVelocity <= 0) {
+        // Calculate the appropriate Y position (feet at ground level)
+        const targetY = groundCheck.groundY + this.standingHeight;
 
-    // Check for ground collision
-    if (this.verticalVelocity <= 0) {
-      // Only check when falling
-      // The "feet" position is lower than the camera
-      const feetPosition = this.cameraHolder.position.clone();
-      feetPosition.y -= this.standingHeight;
-
-      // Check for collision at feet level with a small collision radius
-      const groundCollision = collisionSystem.checkCollision(
-        feetPosition,
-        this.collisionRadius * 0.5 // Smaller radius for ground detection
-      );
-
-      if (groundCollision) {
-        // We hit the ground
-        if (!this.isOnGround) {
-          // Just landed
+        // If we're close to the ground or below it
+        if (currentPosition.y <= targetY + 0.1) {
+          // Snap to ground position
+          this.cameraHolder.position.y = targetY;
+          this.verticalVelocity = 0;
           this.isOnGround = true;
-          // Adjust position to stand exactly on the ground
-          this.cameraHolder.position.y = feetPosition.y + this.standingHeight;
+          return; // Exit early, no need for further movement
         }
-        this.verticalVelocity = 0;
-      } else {
-        this.isOnGround = false;
       }
+    } else {
+      // No ground detected below
+      this.isOnGround = false;
     }
 
-    // Check for ceiling collision if moving upward
+    // Ceiling collision check when moving upward
     if (this.verticalVelocity > 0) {
-      // The "head" position is higher than the camera
-      const headPosition = this.cameraHolder.position.clone();
-      headPosition.y += this.standingHeight;
+      // Position to check (top of player)
+      const headPosition = currentPosition.clone();
+      headPosition.y += this.standingHeight * 0.5;
 
-      // Check for collision at head level
-      const ceilingCollision = collisionSystem.checkCollision(
-        headPosition,
+      // Check for collision at the head position with upward movement applied
+      const ceilingCheck = collisionSystem.getCollisionInfo(
+        new THREE.Vector3(
+          headPosition.x,
+          headPosition.y + this.verticalVelocity * dt,
+          headPosition.z
+        ),
         this.collisionRadius * 0.5
       );
 
-      if (ceilingCollision) {
+      if (ceilingCheck.collision) {
         // Hit ceiling, stop upward momentum
         this.verticalVelocity = 0;
       }
     }
 
-    // Apply vertical movement if not on ground or jumping
-    if (!this.isOnGround || this.verticalVelocity > 0) {
-      this.cameraHolder.position.y += this.verticalVelocity;
-    }
+    // Apply vertical movement
+    this.cameraHolder.position.y += this.verticalVelocity * dt;
 
-    // Terminal velocity limit
+    // Terminal velocity limit to prevent falling too fast
     const terminalVelocity = -0.5;
     if (this.verticalVelocity < terminalVelocity) {
       this.verticalVelocity = terminalVelocity;
+    }
+
+    // Absolute minimum Y position as a failsafe
+    const absoluteMinY = 0.5; // Adjust based on your level's floor height
+    if (this.cameraHolder.position.y < absoluteMinY + this.standingHeight) {
+      this.cameraHolder.position.y = absoluteMinY + this.standingHeight;
+      this.verticalVelocity = 0;
+      this.isOnGround = true;
     }
   }
 

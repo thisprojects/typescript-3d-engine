@@ -170,22 +170,38 @@ export class OrientedBoundingBox {
     collision: boolean;
     penetration: THREE.Vector3 | null;
   } {
+    // Find the closest point on the OBB to the sphere center
     const closestPoint = this.closestPointToPoint(sphere.center);
+
+    // Vector from closest point to sphere center
     const toSphere = new THREE.Vector3().subVectors(
       sphere.center,
       closestPoint
     );
     const distance = toSphere.length();
 
+    // Check for collision
     if (distance <= sphere.radius) {
-      // Calculate penetration vector - points away from OBB
-      const penetrationDepth = sphere.radius - distance;
-      const penetrationDirection =
-        distance > 0
-          ? toSphere.clone().normalize()
-          : this.getNormalAtPoint(closestPoint);
+      // Calculate penetration vector - points away from OBB to resolve collision
+      let penetrationDepth = sphere.radius - distance;
 
-      const penetration = penetrationDirection.multiplyScalar(penetrationDepth);
+      // If sphere center is inside OBB, we need a different approach
+      if (distance < 0.0001) {
+        // Sphere center is inside or extremely close to OBB surface
+        // Find the face normal that requires the minimum displacement
+        const penetration = this.getMinPenetrationVector(sphere.center);
+        return {
+          collision: true,
+          penetration: penetration.multiplyScalar(penetrationDepth + 0.01), // Small buffer
+        };
+      }
+
+      // Normal case: sphere intersects OBB from outside
+      // Use the vector from closest point to sphere center as direction
+      const penetrationDirection = toSphere.clone().normalize();
+      const penetration = penetrationDirection.multiplyScalar(
+        penetrationDepth + 0.01
+      ); // Small buffer
 
       return {
         collision: true,
@@ -197,6 +213,50 @@ export class OrientedBoundingBox {
       collision: false,
       penetration: null,
     };
+  }
+
+  // Add this new method to your OrientedBoundingBox class
+  private getMinPenetrationVector(point: THREE.Vector3): THREE.Vector3 {
+    // When point is inside the OBB, find the face requiring minimum displacement
+    // Transform point to local space
+    const localPoint = new THREE.Vector3().subVectors(point, this.center);
+
+    // Find the penetration depth along each axis
+    const depths = [];
+    for (let i = 0; i < 3; i++) {
+      // Project point onto this axis
+      const projection = localPoint.dot(this.axes[i]);
+
+      // Distance to the "positive" face along this axis
+      const distToPosFace = this.halfSize.getComponent(i) - projection;
+
+      // Distance to the "negative" face along this axis
+      const distToNegFace = this.halfSize.getComponent(i) + projection;
+
+      // Store both with their axis and direction
+      depths.push({
+        axis: i,
+        dist: distToPosFace,
+        dir: 1, // Positive direction
+      });
+
+      depths.push({
+        axis: i,
+        dist: distToNegFace,
+        dir: -1, // Negative direction
+      });
+    }
+
+    // Sort by penetration depth (smallest first)
+    depths.sort((a, b) => a.dist - b.dist);
+
+    // The first element is our minimum penetration
+    const minPen = depths[0];
+
+    // Create the penetration vector in world space
+    const penVector = this.axes[minPen.axis].clone().multiplyScalar(minPen.dir);
+
+    return penVector;
   }
 
   /**
