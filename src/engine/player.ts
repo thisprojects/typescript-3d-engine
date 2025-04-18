@@ -32,7 +32,7 @@ export class Player {
   private weaponTextures: Map<string, THREE.Texture> = new Map();
 
   // Physics properties
-  private gravity: number = 0.01;
+  private gravity: number = 0.02;
   private verticalVelocity: number = 0;
   private jumpForce: number = 0.3;
   private isOnGround: boolean = false;
@@ -114,14 +114,15 @@ export class Player {
     if (!this.weaponImage) return;
 
     // Simple bobbing effect based on time
-    const bobFrequency = 2; // How fast it bobs
+    const bobFrequency = 1; // How fast it bobs
     const bobAmount = 0.03; // How much it moves
 
     // Calculate bobbing based on time
     const bobOffset = Math.sin(Date.now() * 0.005 * bobFrequency) * bobAmount;
 
     // Apply bobbing to weapon position
-    this.weaponImage.position.y = -0.6 + bobOffset;
+    this.weaponImage.position.y = -0.5 + bobOffset;
+    this.weaponImage.position.x = -0 + bobOffset + 0.02;
 
     // Add slight rotation for more natural movement
     this.weaponImage.rotation.z = bobOffset * 0.1;
@@ -149,7 +150,7 @@ export class Player {
     });
 
     this.weaponImage = new THREE.Mesh(geometry, material);
-    this.weaponImage.position.set(0, -0.6, -1);
+    this.weaponImage.position.set(0, -0.5, -1);
     this.camera.add(this.weaponImage);
   }
 
@@ -190,6 +191,7 @@ export class Player {
       -this.maxPitchAngle,
       Math.min(this.maxPitchAngle, targetPitch)
     );
+
     this.cameraPitch.rotation.x =
       this.cameraPitch.rotation.x * (1 - easingFactor) +
       clampedPitch * easingFactor;
@@ -216,8 +218,6 @@ export class Player {
 
     // No horizontal movement input, skip the rest of horizontal movement
     if (direction.length() === 0) {
-      // Update weapon bobbing even if not moving horizontally
-      this.updateWeaponBobbing(deltaTime);
       return;
     }
 
@@ -644,6 +644,17 @@ export class Player {
 
     this.lastShotTime = currentTime;
 
+    if (this.weaponImage) {
+      const recoilAmount = 0.05;
+      this.weaponImage.position.y += recoilAmount;
+
+      setTimeout(() => {
+        if (this.weaponImage) {
+          this.weaponImage.position.y -= recoilAmount;
+        }
+      }, 50);
+    }
+
     // Create a ray from camera
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera); // Center of screen
@@ -658,18 +669,6 @@ export class Player {
       // For simplicity, we'll use a distance-based approach
 
       // Add muzzle flash or shooting animation
-      if (this.weaponImage) {
-        // Simulate recoil by moving the weapon up slightly
-        const recoilAmount = 0.05;
-        this.weaponImage.position.y += recoilAmount;
-
-        // Reset after a short time
-        setTimeout(() => {
-          if (this.weaponImage) {
-            this.weaponImage.position.y -= recoilAmount;
-          }
-        }, 50);
-      }
 
       const direction = this.getDirection();
       const enemyPosition = enemy.mesh.position;
