@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CollisionSystem, Wall } from "./collision";
 
-import { ILevel, IRoom, ITexture } from "../types/level";
+import { ILevel, IRoom, ITexture, IStep } from "../types/level";
 import level1 from "../maps/map.json";
 import { EnemySpawnPoint } from "./enemyManager";
 import { EnemyType } from "./enemy";
@@ -12,6 +12,7 @@ export class Level {
   private textureLoader: THREE.TextureLoader;
   private wallTextures: Map<string, THREE.Texture>;
   private floorTextures: Map<string, THREE.Texture>;
+  private stepTextures: Map<string, THREE.Texture>; // New texture map for steps
   private levelMap: ILevel;
   private spawnPoint;
   public enemySpawnPoints: EnemySpawnPoint[] = [];
@@ -23,6 +24,7 @@ export class Level {
     this.textureLoader = new THREE.TextureLoader();
     this.wallTextures = new Map();
     this.floorTextures = new Map();
+    this.stepTextures = new Map(); // Initialize the step textures map
     this.levelMap = level1;
 
     this.spawnPoint = this.levelMap.spawnPoint;
@@ -58,7 +60,7 @@ export class Level {
     });
   }
 
-  // In level.ts, update loadTextures method
+  // Update loadTextures method to handle step textures
   private loadTextures(textures: ITexture[]): void {
     textures.forEach((texture: ITexture) => {
       const textureObject = this.textureLoader.load(texture.path);
@@ -93,6 +95,17 @@ export class Level {
           textureObject.repeat.set(25, 25);
 
           this.floorTextures.set(texture.name, textureObject);
+          break;
+
+        case "step":
+          // Configure step textures similarly to floor textures
+          textureObject.minFilter = THREE.LinearFilter;
+          textureObject.magFilter = THREE.LinearFilter;
+
+          textureObject.wrapS = textureObject.wrapT = THREE.RepeatWrapping;
+          textureObject.repeat.set(5, 1); // Smaller repeat for steps
+
+          this.stepTextures.set(texture.name, textureObject);
           break;
 
         default:
@@ -132,6 +145,23 @@ export class Level {
           floor.x
         );
       });
+
+      // Add step creation
+      if (room.steps) {
+        room.steps.forEach((step) => {
+          this.createStep(
+            step.x,
+            step.y,
+            step.z,
+            step.width,
+            step.depth,
+            step.height,
+            step.rotation,
+            step.texture,
+            new THREE.Vector3(step.normal.x, step.normal.y, step.normal.z)
+          );
+        });
+      }
     });
 
     // Add light
@@ -167,6 +197,50 @@ export class Level {
 
     this.objects.push(floor);
   }
+
+  // New method to create steps
+  private createStep(
+    x: number,
+    y: number,
+    z: number,
+    width: number,
+    depth: number,
+    height: number,
+    rotation: number,
+    textureKey: string,
+    normal: THREE.Vector3
+  ): void {
+    // Create a box geometry for the step
+    const stepGeometry = new THREE.BoxGeometry(width, height, depth);
+
+    // Get texture for this step or fallback to floor texture
+    const texture =
+      this.stepTextures.get(textureKey) || this.floorTextures.get("floor");
+
+    // Create material for the step
+    const stepMaterial = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.8,
+    });
+
+    // Create the step mesh
+    const step = new THREE.Mesh(stepGeometry, stepMaterial);
+
+    // Position the step
+    // For a step, we position its bottom at y and center at x/z
+    step.position.set(x, y + height / 2, z);
+    step.rotation.y = rotation;
+
+    // Add the step to scene objects
+    this.objects.push(step);
+
+    // Add the step to the collision system with its normal
+    const collidableStep = new Wall(step);
+
+    // Add top surface normal for collision (important for player to stand on it)
+    this.collisionSystem.addCollidable(collidableStep, normal);
+  }
+
   private createWall(
     x: number,
     y: number,

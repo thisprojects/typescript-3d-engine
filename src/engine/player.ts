@@ -41,6 +41,14 @@ export class Player {
   private lastJumpTime: number = 0;
   private jumpCooldown: number = 200; // ms - prevent jump spamming
 
+  // Step climbing properties
+  private maxStepHeight: number = 0.5; // Maximum height the player can step up
+  private isClimbing: boolean = false;
+  private climbDuration: number = 200; // ms
+  private climbStartTime: number = 0;
+  private climbStartPosition: THREE.Vector3 = new THREE.Vector3();
+  private climbTargetPosition: THREE.Vector3 = new THREE.Vector3();
+
   constructor(camera: THREE.PerspectiveCamera, initialPosition?: IPosition) {
     this.camera = camera;
     this.velocity = new THREE.Vector3();
@@ -150,6 +158,13 @@ export class Player {
     collisionSystem: CollisionSystem,
     deltaTime: number
   ): void {
+    // If currently climbing a step, handle that first
+    if (this.isClimbing) {
+      this.updateStepClimbing();
+      this.updateWeaponBobbing(deltaTime);
+      return;
+    }
+
     // Get mouse movement delta
     const mouseMovement = inputManager.getMouseMovement();
 
@@ -245,7 +260,15 @@ export class Player {
       return;
     }
 
-    // If there's a collision, implement improved wall sliding for OBBs
+    // Try to step up if there's a collision
+    if (
+      this.tryStepUp(collisionSystem, originalPosition, newPosition, moveVector)
+    ) {
+      // Successfully started climbing a step
+      return;
+    }
+
+    // If there's a collision and can't step up, implement improved wall sliding for OBBs
     if (collisionInfo.penetration && collisionInfo.collidable) {
       // Get the wall normal (direction to push player out)
       const wallNormal = collisionInfo.penetration.clone().normalize();
@@ -289,12 +312,14 @@ export class Player {
     this.updateWeaponBobbing(deltaTime);
   }
 
-  // Replace your entire updateVerticalMovement method with this implementation
   private updateVerticalMovement(
     inputManager: InputManager,
     collisionSystem: CollisionSystem,
     deltaTime: number
   ): void {
+    // Skip vertical movement update if currently climbing a step
+    if (this.isClimbing) return;
+
     // Normalize deltaTime to avoid physics issues at different frame rates
     const dt = Math.min(deltaTime / 16.67, 2.0); // Cap at 2x normal time step
 
@@ -315,7 +340,6 @@ export class Player {
     const currentPosition = this.cameraHolder.position.clone();
 
     // Ground detection using the specialized method
-    // Note: We need to add this method to CollisionSystem first
     const groundCheck = collisionSystem.checkGroundCollision(
       currentPosition,
       this.collisionRadius,
@@ -381,6 +405,97 @@ export class Player {
       this.verticalVelocity = 0;
       this.isOnGround = true;
     }
+  }
+
+  // New method to try stepping up
+  private tryStepUp(
+    collisionSystem: CollisionSystem,
+    originalPosition: THREE.Vector3,
+    newPosition: THREE.Vector3,
+    moveVector: THREE.Vector3
+  ): boolean {
+    // Only try to step up if on the ground
+    if (!this.isOnGround) return false;
+
+    // Check if there's a step we can climb
+    // First, try moving to a position slightly higher than the current position
+    const stepTestPosition = newPosition.clone();
+    stepTestPosition.y += this.maxStepHeight;
+
+    // Check if there's a collision at the higher position
+    if (
+      collisionSystem.checkCollision(stepTestPosition, this.collisionRadius)
+    ) {
+      // If there's still a collision higher up, we can't step here
+      return false;
+    }
+
+    // Now check if there's ground at or below the new higher position
+    const groundCheck = collisionSystem.checkGroundCollision(
+      stepTestPosition,
+      this.collisionRadius,
+      this.maxStepHeight + 0.1 // Just need to check a bit below the higher position
+    );
+
+    // If we found ground and it's within step height range
+    if (groundCheck.collision && groundCheck.groundY !== null) {
+      const groundHeight = groundCheck.groundY + this.standingHeight;
+      const heightDifference = groundHeight - originalPosition.y;
+
+      // Only climb if the step is within our climb range
+      if (heightDifference > 0 && heightDifference <= this.maxStepHeight) {
+        // Start the climbing process
+        this.startStepClimbing(originalPosition, newPosition, groundHeight);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Method to start the step climbing process
+  private startStepClimbing(
+    startPosition: THREE.Vector3,
+    targetHorizontalPosition: THREE.Vector3,
+    targetYPosition: number
+  ): void {
+    this.isClimbing = true;
+    this.climbStartTime = Date.now();
+    this.climbStartPosition.copy(startPosition);
+
+    // Target position combines horizontal movement and vertical step up
+    this.climbTargetPosition.set(
+      targetHorizontalPosition.x,
+      targetYPosition,
+      targetHorizontalPosition.z
+    );
+  }
+
+  private updateStepClimbing(): void {
+    const currentTime = Date.now();
+    const elapsedTime = currentTime - this.climbStartTime;
+
+    if (elapsedTime >= this.climbDuration) {
+      // Climbing finished
+      this.cameraHolder.position.copy(this.climbTargetPosition);
+      this.isClimbing = false;
+      this.verticalVelocity = 0;
+      return;
+    }
+
+    // Calculate progress (0 to 1)
+    const progress = elapsedTime / this.climbDuration;
+
+    // Smooth easing for the step climb
+    // Use a sine-based easing for more natural movement
+    const easedProgress = Math.sin((progress * Math.PI) / 2);
+
+    // Interpolate between start and target positions
+    this.cameraHolder.position.lerpVectors(
+      this.climbStartPosition,
+      this.climbTargetPosition,
+      easedProgress
+    );
   }
 
   private findBestSlidingDirection(

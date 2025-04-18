@@ -7,7 +7,8 @@
     { "type": "wall", "name": "east", "path": "FreeDoomWall2.png" },
     { "type": "wall", "name": "west", "path": "FreeDoomWall2.png" },
     { "type": "wall", "name": "diagonal", "path": "FreeDoomWall3.png" },
-    { "type": "floor", "name": "floor", "path": "FreeDoomFloor1.png" }
+    { "type": "floor", "name": "floor", "path": "FreeDoomFloor1.png" },
+    { "type": "step", "name": "step", "path": "FreeDoomFloor1.png" }
   ],
   "rooms": [
     {
@@ -314,17 +315,78 @@
           "texture": "floor",
           "rotation": -1.5707963267948966
         }
+      ],
+      "steps": [
+        {
+          "x": 112.5,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 1.5,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        },
+        {
+          "x": 112,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 1.25,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        },
+        {
+          "x": 111.5,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 1,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        },
+        {
+          "x": 111,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 0.75,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        },
+        {
+          "x": 110.5,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 0.5,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        },
+        {
+          "x": 110,
+          "y": -1,
+          "z": 57,
+          "width": 0.5,
+          "depth": 5,
+          "height": 0.25,
+          "rotation": 0,
+          "texture": "step",
+          "normal": { "x": 0, "y": 1, "z": 0 }
+        }
       ]
     }
   ],
-  "enemies": [
-    {
-      "x": 65,
-      "y": 0,
-      "z": 60,
-      "type": "imp"
-    }
-  ],
+  "enemies": [],
   "entities": [
     {
       "type": "player",
