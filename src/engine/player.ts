@@ -122,7 +122,7 @@ export class Player {
 
     // Apply bobbing to weapon position
     this.weaponImage.position.y = -0.5 + bobOffset;
-    this.weaponImage.position.x = -0 + bobOffset + 0.02;
+    this.weaponImage.position.x = -0 - bobOffset + 0.001;
 
     // Add slight rotation for more natural movement
     this.weaponImage.rotation.z = bobOffset * 0.1;
