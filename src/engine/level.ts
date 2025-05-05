@@ -72,7 +72,6 @@ export class Level {
 
       switch (texture.type) {
         case "wall":
-          console.log("TEXTTURE", texture);
           // Fix #2: CRUCIAL - Use different filtering for textures
           // LinearFilter for both prevents mipmap thrashing
           textureObject.minFilter = THREE.LinearFilter;
@@ -98,6 +97,17 @@ export class Level {
           break;
 
         case "step":
+          // Configure step textures similarly to floor textures
+          textureObject.minFilter = THREE.LinearFilter;
+          textureObject.magFilter = THREE.LinearFilter;
+
+          textureObject.wrapS = textureObject.wrapT = THREE.RepeatWrapping;
+          textureObject.repeat.set(5, 1); // Smaller repeat for steps
+
+          this.stepTextures.set(texture.name, textureObject);
+          break;
+
+        case "block":
           // Configure step textures similarly to floor textures
           textureObject.minFilter = THREE.LinearFilter;
           textureObject.magFilter = THREE.LinearFilter;
@@ -159,6 +169,22 @@ export class Level {
             step.rotation,
             step.texture,
             new THREE.Vector3(step.normal.x, step.normal.y, step.normal.z)
+          );
+        });
+      }
+
+      if (room.blocks) {
+        room.blocks.forEach((block) => {
+          this.createStep(
+            block.x,
+            block.y,
+            block.z,
+            block.width,
+            block.depth,
+            block.height,
+            block.rotation,
+            block.texture,
+            new THREE.Vector3(0, 0, 0)
           );
         });
       }

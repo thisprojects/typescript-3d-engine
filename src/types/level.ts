@@ -71,10 +71,22 @@ export interface IStep {
   };
 }
 
+export interface IBlock {
+  x: number;
+  y: number;
+  z: number;
+  width: number;
+  depth: number;
+  height: number;
+  rotation: number;
+  texture: string;
+}
+
 export interface IRoom {
   walls: IWall[];
   floors: IFloor[];
   steps?: IStep[]; // Make steps optional since old maps might not have them
+  blocks?: IBlock[];
 }
 
 export interface ILevel {
